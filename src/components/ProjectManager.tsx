@@ -1,3 +1,4 @@
+```tsx
 import React, { useState } from 'react';
 import { Infinity, Plus, Folder, Globe, Gamepad2, Smartphone, AlertTriangle, FileText } from 'lucide-react';
 
@@ -324,6 +325,9 @@ game.onPlayerJoin(onPlayerJoin)`;
 
 inst ploid = script.Parent
 
+-- Player Owner Reference (set by the game engine)
+ploid.PlayerOwner = nil  -- Will be set when player spawns
+
 -- Health Properties
 ploid.MaxHealth = 100
 ploid.Health = 100
@@ -373,9 +377,9 @@ print("Ploid configured successfully")`;
         return `-- Input Handler (Home Script)
 -- WARNING: Modifying this script may cause player movement issues!
 
-inst inputService = game.InputService
-inst player = game.Players.LocalPlayer
-inst character = player.Character
+inst player = script.parent.Ploid.PlayerOwner
+inst input = player.input
+inst character = player.CharacterModel
 inst ploidConfig = character.Ploid.Config
 
 inst keysPressed = {}
@@ -412,10 +416,10 @@ inputService.onKeyUp(onKeyUp)`;
         return `-- Camera Controller (Home Script)
 -- WARNING: Modifying this script may cause camera issues!
 
+inst player = script.parent.Ploid.PlayerOwner
 inst camera = Workspace.Camera
-inst player = game.Players.LocalPlayer
-inst character = player.Character
-inst mouse = game.Players.LocalPlayer.Mouse
+inst character = player.CharacterModel
+inst mouse = player.Mouse
 
 inst cameraType = "ThirdPerson" -- "ThirdPerson", "FirstPerson", "TopDown"
 inst sensitivity = 0.5
@@ -462,8 +466,8 @@ mouse.onMove(onMouseMove)`;
         return `-- Movement Controller (Home Script)
 -- WARNING: Modifying this script may cause movement issues!
 
-inst player = game.Players.LocalPlayer
-inst character = player.Character
+inst player = script.parent.Ploid.PlayerOwner
+inst character = player.CharacterModel
 inst ploidConfig = character.Ploid.Config
 
 inst velocity = { x: 0, y: 0, z: 0 }
@@ -521,12 +525,22 @@ function jump(power)
     end
 end
 
+function stopMovingForward()
+    velocity.z = velocity.z * 0.5
+end
+
+function stopMovingLeft()
+    velocity.x = velocity.x * 0.5
+end
+
 -- Expose movement functions
 character.moveForward = moveForward
 character.moveBackward = moveBackward
 character.moveLeft = moveLeft
 character.moveRight = moveRight
 character.jump = jump
+character.stopMovingForward = stopMovingForward
+character.stopMovingLeft = stopMovingLeft
 
 game.onHeartbeat(updateMovement)`;
       case 'database':
@@ -831,3 +845,4 @@ function addExperience(playerId, exp) {
     </div>
   );
 };
+```

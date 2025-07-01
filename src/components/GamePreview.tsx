@@ -1,3 +1,4 @@
+```tsx
 import React, { useRef, useEffect, useState } from 'react';
 import { Play, Square, RotateCcw, Settings, Maximize } from 'lucide-react';
 import * as THREE from 'three';
@@ -7,6 +8,7 @@ interface GamePreviewProps {
 }
 
 interface ScriptContext {
+  script: any;
   player: any;
   character: any;
   camera: any;
@@ -44,7 +46,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     try {
       // Create a safe execution environment
       const scriptFunction = new Function(
-        'inst', 'print', 'game', 'player', 'character', 'camera', 'inputService', 'workspace', 'math', 'wait',
+        'inst', 'print', 'game', 'script', 'player', 'character', 'camera', 'inputService', 'workspace', 'math', 'wait',
         `
         ${scriptContent}
         `
@@ -55,6 +57,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         (path: string) => getObjectByPath(path, context), // inst function
         context.print,
         context.game,
+        context.script,
         context.player,
         context.character,
         context.camera,
@@ -72,7 +75,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   };
 
   const getObjectByPath = (path: string, context: ScriptContext) => {
-    // Parse paths like "game.Players.LocalPlayer" or "Workspace.Camera"
+    // Parse paths like "script.parent.Ploid.PlayerOwner" or "Workspace.Camera"
     const parts = path.split('.');
     let current: any = context;
 
@@ -80,8 +83,23 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       if (current && current[part]) {
         current = current[part];
       } else {
-        addConsoleOutput(`[WARNING] Object path not found: ${path}`);
-        return null;
+        // Handle special cases for Virb.IO object hierarchy
+        if (part === 'parent' && current === context.script) {
+          // script.parent should return the character folder
+          current = context.character;
+        } else if (part === 'Ploid' && current === context.character) {
+          // character.Ploid should return the ploid object
+          current = context.character.Ploid;
+        } else if (part === 'PlayerOwner' && current && current.PlayerOwner) {
+          current = current.PlayerOwner;
+        } else if (part === 'CharacterModel' && current === context.player) {
+          current = context.character;
+        } else if (part === 'Config' && current && current.Config) {
+          current = current.Config;
+        } else {
+          addConsoleOutput(`[WARNING] Object path not found: ${path} (at ${part})`);
+          return null;
+        }
       }
     }
 
@@ -128,52 +146,109 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   };
 
   const createScriptContext = (): ScriptContext => {
-    const context: ScriptContext = {
-      player: {
-        Name: 'LocalPlayer',
-        Character: null,
-        moveForward: () => {
-          addConsoleOutput('[PLAYER] moveForward() called');
-          setPlayerVelocity(prev => ({ ...prev, z: prev.z - 0.5 }));
-        },
-        moveBackward: () => {
-          addConsoleOutput('[PLAYER] moveBackward() called');
-          setPlayerVelocity(prev => ({ ...prev, z: prev.z + 0.5 }));
-        },
-        moveLeft: () => {
-          addConsoleOutput('[PLAYER] moveLeft() called');
-          setPlayerVelocity(prev => ({ ...prev, x: prev.x - 0.5 }));
-        },
-        moveRight: () => {
-          addConsoleOutput('[PLAYER] moveRight() called');
-          setPlayerVelocity(prev => ({ ...prev, x: prev.x + 0.5 }));
-        },
-        jump: (power: number) => {
-          if (isGrounded) {
-            addConsoleOutput(`[PLAYER] jump(${power}) called`);
-            setPlayerVelocity(prev => ({ ...prev, y: power * 0.1 }));
-            setIsGrounded(false);
-          }
-        },
-        stopMovingForward: () => {
-          addConsoleOutput('[PLAYER] stopMovingForward() called');
-          setPlayerVelocity(prev => ({ ...prev, z: prev.z * 0.5 }));
-        },
-        stopMovingLeft: () => {
-          addConsoleOutput('[PLAYER] stopMovingLeft() called');
-          setPlayerVelocity(prev => ({ ...prev, x: prev.x * 0.5 }));
-        },
-        position: playerPosition,
-        rotation: { x: 0, y: 0, z: 0 },
-        rotate: (deltaX: number, deltaY: number) => {
-          addConsoleOutput(`[PLAYER] rotate(${deltaX.toFixed(2)}, ${deltaY.toFixed(2)}) called`);
-          setCameraAngle(prev => ({
-            horizontal: prev.horizontal + deltaX,
-            vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical + deltaY))
-          }));
+    // Create the ploid config object
+    const ploidConfig = {
+      WalkSpeed: 16,
+      RunSpeed: 24,
+      JumpPower: 50,
+      MaxHealth: 100,
+      Health: 100,
+      Mass: 1,
+      Friction: 0.8,
+      Elasticity: 0.2
+    };
+
+    // Create the ploid object
+    const ploid = {
+      PlayerOwner: null, // Will be set to player
+      Config: ploidConfig,
+      MaxHealth: 100,
+      Health: 100,
+      WalkSpeed: 16,
+      RunSpeed: 24,
+      JumpPower: 50
+    };
+
+    // Create the character object
+    const character = {
+      Ploid: ploid,
+      position: playerPosition,
+      rotation: { x: 0, y: 0, z: 0 },
+      moveForward: (speed: number) => {
+        addConsoleOutput(`[CHARACTER] moveForward(${speed}) called`);
+        setPlayerVelocity(prev => ({ ...prev, z: prev.z - speed * 0.03 }));
+      },
+      moveBackward: (speed: number) => {
+        addConsoleOutput(`[CHARACTER] moveBackward(${speed}) called`);
+        setPlayerVelocity(prev => ({ ...prev, z: prev.z + speed * 0.03 }));
+      },
+      moveLeft: (speed: number) => {
+        addConsoleOutput(`[CHARACTER] moveLeft(${speed}) called`);
+        setPlayerVelocity(prev => ({ ...prev, x: prev.x - speed * 0.03 }));
+      },
+      moveRight: (speed: number) => {
+        addConsoleOutput(`[CHARACTER] moveRight(${speed}) called`);
+        setPlayerVelocity(prev => ({ ...prev, x: prev.x + speed * 0.03 }));
+      },
+      jump: (power: number) => {
+        if (isGrounded) {
+          addConsoleOutput(`[CHARACTER] jump(${power}) called`);
+          setPlayerVelocity(prev => ({ ...prev, y: power * 0.02 }));
+          setIsGrounded(false);
         }
       },
-      character: null, // Will be set after player is created
+      stopMovingForward: () => {
+        addConsoleOutput('[CHARACTER] stopMovingForward() called');
+        setPlayerVelocity(prev => ({ ...prev, z: prev.z * 0.5 }));
+      },
+      stopMovingLeft: () => {
+        addConsoleOutput('[CHARACTER] stopMovingLeft() called');
+        setPlayerVelocity(prev => ({ ...prev, x: prev.x * 0.5 }));
+      },
+      rotate: (deltaX: number, deltaY: number) => {
+        addConsoleOutput(`[CHARACTER] rotate(${deltaX.toFixed(2)}, ${deltaY.toFixed(2)}) called`);
+        setCameraAngle(prev => ({
+          horizontal: prev.horizontal + deltaX,
+          vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical + deltaY))
+        }));
+      }
+    };
+
+    // Create the player object
+    const player = {
+      Name: 'LocalPlayer',
+      CharacterModel: character,
+      input: {
+        onKeyDown: (callback: (key: string) => void) => {
+          addConsoleOutput('[INPUT] onKeyDown() handler registered');
+          player.input._keyDownCallback = callback;
+        },
+        onKeyUp: (callback: (key: string) => void) => {
+          addConsoleOutput('[INPUT] onKeyUp() handler registered');
+          player.input._keyUpCallback = callback;
+        },
+        _keyDownCallback: null,
+        _keyUpCallback: null
+      },
+      Mouse: {
+        onMove: (callback: (deltaX: number, deltaY: number) => void) => {
+          addConsoleOutput('[MOUSE] onMove() handler registered');
+          player.Mouse._mouseMoveCallback = callback;
+        },
+        _mouseMoveCallback: null
+      }
+    };
+
+    // Set up the ploid's PlayerOwner reference
+    ploid.PlayerOwner = player;
+
+    const context: ScriptContext = {
+      script: {
+        parent: character, // script.parent points to the character
+        Parent: character  // Also support uppercase
+      },
+      player: player,
+      character: character,
       camera: {
         position: { x: 0, y: 5, z: 10 },
         rotation: { x: 0, y: 0, z: 0 },
@@ -192,7 +267,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       inputService: {
         onKeyPress: (callback: (key: string) => void) => {
           addConsoleOutput('[INPUT] onKeyPress() handler registered');
-          // Store the callback for later use
           context.inputService._keyPressCallback = callback;
         },
         onKeyDown: (callback: (key: string) => void) => {
@@ -209,7 +283,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       },
       game: {
         Players: {
-          LocalPlayer: null // Will be set to context.player
+          LocalPlayer: player
         },
         InputService: null, // Will be set to context.inputService
         onHeartbeat: (callback: (deltaTime: number) => void) => {
@@ -223,7 +297,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       },
       workspace: {
         Camera: null, // Will be set to context.camera
-        Player: null   // Will be set to context.player
+        Player: player
       },
       print: (message: string) => {
         addConsoleOutput(`[SCRIPT] ${message}`);
@@ -231,11 +305,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     };
 
     // Set up cross-references
-    context.player.Character = context.character;
-    context.game.Players.LocalPlayer = context.player;
     context.game.InputService = context.inputService;
     context.workspace.Camera = context.camera;
-    context.workspace.Player = context.player;
 
     return context;
   };
@@ -566,16 +637,18 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         const deltaY = event.movementY || 0;
 
         // Call script-based camera rotation if available
-        if (context.player.rotate) {
-          context.player.rotate(deltaX * 0.002, deltaY * 0.002);
+        if (context.player.Mouse._mouseMoveCallback) {
+          context.player.Mouse._mouseMoveCallback(deltaX * 0.002, deltaY * 0.002);
+        } else if (context.character.rotate) {
+          context.character.rotate(deltaX * 0.002, deltaY * 0.002);
         }
       } else if (isMouseDown) {
         // Fallback for when pointer lock is not available
         const deltaX = event.clientX - mouseX;
         const deltaY = event.clientY - mouseY;
 
-        if (context.player.rotate) {
-          context.player.rotate(deltaX * 0.005, deltaY * 0.005);
+        if (context.character.rotate) {
+          context.character.rotate(deltaX * 0.005, deltaY * 0.005);
         }
 
         mouseX = event.clientX;
@@ -597,9 +670,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         const newKeys = new Set(prev);
         newKeys.add(key);
         
-        // Call script-based input handlers
+        // Call script-based input handlers in proper order
         if (context.inputService._keyDownCallback) {
           context.inputService._keyDownCallback(key);
+        }
+        if (context.player.input._keyDownCallback) {
+          context.player.input._keyDownCallback(key);
         }
         
         return newKeys;
@@ -615,9 +691,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         const newKeys = new Set(prev);
         newKeys.delete(key);
         
-        // Call script-based input handlers
+        // Call script-based input handlers in proper order
         if (context.inputService._keyUpCallback) {
           context.inputService._keyUpCallback(key);
+        }
+        if (context.player.input._keyUpCallback) {
+          context.player.input._keyUpCallback(key);
         }
         
         return newKeys;
@@ -667,6 +746,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     console.log('[GAME] 3D Game initialized with script execution system');
     addConsoleOutput('[SYSTEM] 3D Game initialized with script execution system');
     addConsoleOutput('[SYSTEM] Player scripts loaded and ready');
+    addConsoleOutput('[SYSTEM] Virb.IO object hierarchy: script.parent.Ploid.PlayerOwner');
 
     // Cleanup function
     return () => {
@@ -1002,14 +1082,14 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             <div className="text-sm space-y-1">
               {project.type === 'game3d' && (
                 <>
-                  <div className="text-green-400 font-semibold">🎮 Script-Driven Controls:</div>
-                  <div className="text-yellow-400">WASD: Triggers script movement</div>
-                  <div className="text-cyan-400">Mouse: Script-based camera</div>
-                  <div className="text-purple-400">Space: Script jump function</div>
+                  <div className="text-green-400 font-semibold">🎮 Virb.IO Script System:</div>
+                  <div className="text-yellow-400">WASD: script.parent.Ploid.PlayerOwner</div>
+                  <div className="text-cyan-400">Mouse: character.rotate()</div>
+                  <div className="text-purple-400">Space: character.jump(power)</div>
                   <div className="text-red-400">Player: Red Cube (Script Controlled)</div>
                   <div className="text-green-400">Scripts Loaded: {loadedScripts.length}</div>
                   <div className="text-orange-400">Keys Active: {Array.from(keys).join(', ') || 'None'}</div>
-                  <div className="text-cyan-400">Your scripts are running! ✓</div>
+                  <div className="text-cyan-400">Object Hierarchy: ✓ Working!</div>
                 </>
               )}
               {project.type === 'game2d' && (
@@ -1041,7 +1121,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
                 <div>Grounded: {isGrounded ? 'Yes' : 'No'}</div>
                 <div>Keys: {keys.size}</div>
                 <div className="text-green-400">Scripts: {loadedScripts.length} ✓</div>
-                <div className="text-cyan-400">Script Engine: Active ✓</div>
+                <div className="text-cyan-400">Hierarchy: ✓ Active</div>
               </>
             )}
           </div>
@@ -1050,8 +1130,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           {project.type === 'game3d' && (
             <div className="absolute top-4 left-4 bg-black bg-opacity-70 text-white p-3 rounded-lg">
               <div className="text-sm space-y-1">
-                <div className="text-green-400 font-semibold">🚀 Script System Active!</div>
-                <div className="text-yellow-400">Your player scripts are running</div>
+                <div className="text-green-400 font-semibold">🚀 Virb.IO Object System!</div>
+                <div className="text-yellow-400">script.parent.Ploid.PlayerOwner</div>
                 <div className="text-cyan-400">Input → Scripts → Movement</div>
                 <div className="text-purple-400">Click canvas to start!</div>
               </div>
@@ -1063,15 +1143,15 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       {/* Console Output */}
       <div className="bg-gray-800 border-t border-gray-700 p-4 h-32 overflow-auto">
         <div className="text-sm font-mono text-gray-300 space-y-1">
-          <div className="text-green-400">[INFO] Game initialized with script execution system</div>
+          <div className="text-green-400">[INFO] Game initialized with Virb.IO script execution system</div>
           <div className="text-blue-400">[DEBUG] Loading {project.type} environment...</div>
           <div className="text-green-400">[INFO] Workspace objects loaded from project ✓</div>
           {project.type === 'game3d' && (
             <>
               <div className="text-blue-400">[DEBUG] 3D scene created with THREE.js</div>
               <div className="text-green-400">[INFO] Player spawned at Actor spawn point ({spawnPoint.x}, {spawnPoint.y}, {spawnPoint.z})</div>
-              <div className="text-purple-400">[SYSTEM] Script execution engine initialized</div>
-              <div className="text-cyan-400">[SYSTEM] Player scripts loaded: {loadedScripts.map(s => s.name).join(', ')}</div>
+              <div className="text-purple-400">[SYSTEM] Virb.IO object hierarchy initialized</div>
+              <div className="text-cyan-400">[SYSTEM] script.parent.Ploid.PlayerOwner → Player object</div>
               <div className="text-yellow-400">[INFO] Input system connected to scripts</div>
               <div className="text-green-400">[INFO] Movement controlled by your scripts ✓</div>
             </>
@@ -1085,3 +1165,4 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     </div>
   );
 };
+```

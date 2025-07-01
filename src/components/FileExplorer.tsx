@@ -8,6 +8,25 @@ interface FileExplorerProps {
   installedPlugins: any[];
 }
 
+const ScriptIcon: React.FC<{ type: string }> = ({ type }) => {
+  const getColor = () => {
+    switch (type) {
+      case 'vscript': return 'bg-green-500';
+      case 'vlscript': return 'bg-red-500';
+      case 'vdata': return 'bg-yellow-500';
+      case 'config': return 'bg-blue-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  return (
+    <div className="relative">
+      {type === 'config' ? <Settings className="w-4 h-4 text-gray-300" /> : <FileText className="w-4 h-4 text-gray-300" />}
+      <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 ${getColor()} rounded-sm`}></div>
+    </div>
+  );
+};
+
 export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, currentFile, project, installedPlugins }) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root', 'workspace', 'replicatedStorage', 'serverStorage']));
   const [showWarning, setShowWarning] = useState<string | null>(null);
@@ -16,45 +35,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
   const [addMenuParent, setAddMenuParent] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingName, setEditingName] = useState<string | null>(null);
-  const [services, setServices] = useState(() => buildServicesFromProject());
 
   const hasThreeDStorage = installedPlugins.some(plugin => plugin.name === 'THREEDStorage');
-
-  const objectTypes = [
-    { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties', allowedParents: ['workspace', 'folder', 'model', 'ploid'] },
-    { id: 'model', name: 'Model', icon: '🏗️', description: 'Container for 3D objects', allowedParents: ['workspace', 'folder', 'serverStorage'] },
-    { id: 'folder', name: 'Folder', icon: '📁', description: 'Organize objects in folders', allowedParents: ['workspace', 'replicatedStorage', 'serverStorage', 'folder', 'model'] },
-    { id: 'vscript', name: 'Server Script', icon: '📜', description: 'Server-side script (.vscript)', allowedParents: ['replicatedStorage', 'serverStorage', 'folder'] },
-    { id: 'vlscript', name: 'Client Script', icon: '📋', description: 'Client-side script (.vlscript)', allowedParents: ['replicatedStorage', 'serverStorage', 'folder'] },
-    { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script (.vdata)', allowedParents: ['replicatedFirst', 'folder'] },
-    { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller', allowedParents: ['serverStorage', 'folder', 'model'] },
-    { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block', allowedParents: ['workspace', 'folder', 'model'] },
-    { id: 'sphere', name: 'Sphere', icon: '⚪', description: '3D sphere', allowedParents: ['workspace', 'folder', 'model'] },
-    { id: 'cylinder', name: 'Cylinder', icon: '🥫', description: '3D cylinder', allowedParents: ['workspace', 'folder', 'model'] },
-    { id: 'image', name: 'Image/Texture', icon: '🖼️', description: 'Image or texture file', allowedParents: ['replicatedStorage', 'folder'] },
-    { id: 'sound', name: 'Sound', icon: '🔊', description: 'Audio file', allowedParents: ['replicatedStorage', 'soundService', 'folder'] },
-    { id: 'video', name: 'Video', icon: '🎬', description: 'Video file', allowedParents: ['mediaService', 'folder'] },
-    { id: 'ui', name: 'UI Screen', icon: '📱', description: 'User interface screen', allowedParents: ['uiService', 'folder'] }
-  ];
-
-  const ScriptIcon: React.FC<{ type: string }> = ({ type }) => {
-    const getColor = () => {
-      switch (type) {
-        case 'vscript': return 'bg-green-500';
-        case 'vlscript': return 'bg-red-500';
-        case 'vdata': return 'bg-yellow-500';
-        case 'config': return 'bg-blue-500';
-        default: return 'bg-gray-500';
-      }
-    };
-
-    return (
-      <div className="relative">
-        {type === 'config' ? <Settings className="w-4 h-4 text-gray-300" /> : <FileText className="w-4 h-4 text-gray-300" />}
-        <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 ${getColor()} rounded-sm`}></div>
-      </div>
-    );
-  };
 
   function buildServicesFromProject() {
     const services = [
@@ -193,6 +175,25 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
 
     return services;
   }
+
+  const [services, setServices] = useState(() => buildServicesFromProject());
+
+  const objectTypes = [
+    { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties', allowedParents: ['workspace', 'folder', 'model', 'ploid'] },
+    { id: 'model', name: 'Model', icon: '🏗️', description: 'Container for 3D objects', allowedParents: ['workspace', 'folder', 'serverStorage'] },
+    { id: 'folder', name: 'Folder', icon: '📁', description: 'Organize objects in folders', allowedParents: ['workspace', 'replicatedStorage', 'serverStorage', 'folder', 'model'] },
+    { id: 'vscript', name: 'Server Script', icon: '📜', description: 'Server-side script (.vscript)', allowedParents: ['replicatedStorage', 'serverStorage', 'folder'] },
+    { id: 'vlscript', name: 'Client Script', icon: '📋', description: 'Client-side script (.vlscript)', allowedParents: ['replicatedStorage', 'serverStorage', 'folder'] },
+    { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script (.vdata)', allowedParents: ['replicatedFirst', 'folder'] },
+    { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller', allowedParents: ['serverStorage', 'folder', 'model'] },
+    { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block', allowedParents: ['workspace', 'folder', 'model'] },
+    { id: 'sphere', name: 'Sphere', icon: '⚪', description: '3D sphere', allowedParents: ['workspace', 'folder', 'model'] },
+    { id: 'cylinder', name: 'Cylinder', icon: '🥫', description: '3D cylinder', allowedParents: ['workspace', 'folder', 'model'] },
+    { id: 'image', name: 'Image/Texture', icon: '🖼️', description: 'Image or texture file', allowedParents: ['replicatedStorage', 'folder'] },
+    { id: 'sound', name: 'Sound', icon: '🔊', description: 'Audio file', allowedParents: ['replicatedStorage', 'soundService', 'folder'] },
+    { id: 'video', name: 'Video', icon: '🎬', description: 'Video file', allowedParents: ['mediaService', 'folder'] },
+    { id: 'ui', name: 'UI Screen', icon: '📱', description: 'User interface screen', allowedParents: ['uiService', 'folder'] }
+  ];
 
   const getFilteredObjectTypes = (parentType: string) => {
     return objectTypes.filter(type => {

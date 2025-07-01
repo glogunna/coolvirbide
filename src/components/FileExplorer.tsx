@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, Folder, FileText, Database, Volume2, Image, Box, Monitor, Plus, MoreHorizontal, AlertTriangle, Settings } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FileText, Database, Volume2, Image, Box, Monitor, Plus, MoreHorizontal, AlertTriangle, Settings, Search, Edit2, Trash2 } from 'lucide-react';
 
 interface FileExplorerProps {
   onFileSelect: (file: any) => void;
@@ -11,8 +11,31 @@ interface FileExplorerProps {
 export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, currentFile, project, installedPlugins }) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root', 'workspace', 'replicatedStorage', 'serverStorage']));
   const [showWarning, setShowWarning] = useState<string | null>(null);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [addMenuPosition, setAddMenuPosition] = useState({ x: 0, y: 0 });
+  const [addMenuParent, setAddMenuParent] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [services, setServices] = useState(() => buildServicesFromProject());
 
   const hasThreeDStorage = installedPlugins.some(plugin => plugin.name === 'THREEDStorage');
+
+  const objectTypes = [
+    { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties', allowedParents: ['workspace', 'folder', 'model', 'ploid'] },
+    { id: 'model', name: 'Model', icon: '🏗️', description: 'Container for 3D objects', allowedParents: ['workspace', 'folder', 'serverStorage'] },
+    { id: 'folder', name: 'Folder', icon: '📁', description: 'Organize objects in folders', allowedParents: ['workspace', 'replicatedStorage', 'serverStorage', 'folder', 'model'] },
+    { id: 'vscript', name: 'Server Script', icon: '📜', description: 'Server-side script (.vscript)', allowedParents: ['replicatedStorage', 'serverStorage', 'folder'] },
+    { id: 'vlscript', name: 'Client Script', icon: '📋', description: 'Client-side script (.vlscript)', allowedParents: ['replicatedStorage', 'serverStorage', 'folder'] },
+    { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script (.vdata)', allowedParents: ['replicatedFirst', 'folder'] },
+    { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller', allowedParents: ['serverStorage', 'folder', 'model'] },
+    { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block', allowedParents: ['workspace', 'folder', 'model'] },
+    { id: 'sphere', name: 'Sphere', icon: '⚪', description: '3D sphere', allowedParents: ['workspace', 'folder', 'model'] },
+    { id: 'cylinder', name: 'Cylinder', icon: '🥫', description: '3D cylinder', allowedParents: ['workspace', 'folder', 'model'] },
+    { id: 'image', name: 'Image/Texture', icon: '🖼️', description: 'Image or texture file', allowedParents: ['replicatedStorage', 'folder'] },
+    { id: 'sound', name: 'Sound', icon: '🔊', description: 'Audio file', allowedParents: ['replicatedStorage', 'soundService', 'folder'] },
+    { id: 'video', name: 'Video', icon: '🎬', description: 'Video file', allowedParents: ['mediaService', 'folder'] },
+    { id: 'ui', name: 'UI Screen', icon: '📱', description: 'User interface screen', allowedParents: ['uiService', 'folder'] }
+  ];
 
   const ScriptIcon: React.FC<{ type: string }> = ({ type }) => {
     const getColor = () => {
@@ -33,7 +56,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
     );
   };
 
-  const buildServicesFromProject = () => {
+  function buildServicesFromProject() {
     const services = [
       {
         id: 'workspace',
@@ -50,7 +73,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
           },
           ...project.services.workspace.objects.map((obj: any) => ({
             ...obj,
-            icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : <Box className="w-4 h-4 text-indigo-400" />
+            icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : <Box className="w-4 h-4 text-indigo-400" />,
+            children: obj.children || []
           }))
         ]
       },
@@ -65,7 +89,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             icon: <Image className="w-4 h-4 text-purple-400" />,
             children: project.services.replicatedStorage.images.map((img: any) => ({
               ...img,
-              icon: <Image className="w-4 h-4 text-purple-400" />
+              icon: <Image className="w-4 h-4 text-purple-400" />,
+              children: img.children || []
             }))
           }] : []),
           ...(project.services.replicatedStorage.sounds.length > 0 ? [{
@@ -74,7 +99,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             icon: <Volume2 className="w-4 h-4 text-yellow-400" />,
             children: project.services.replicatedStorage.sounds.map((sound: any) => ({
               ...sound,
-              icon: <Volume2 className="w-4 h-4 text-yellow-400" />
+              icon: <Volume2 className="w-4 h-4 text-yellow-400" />,
+              children: sound.children || []
             }))
           }] : []),
           ...(project.services.replicatedStorage.scripts.length > 0 ? [{
@@ -83,7 +109,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             icon: <Folder className="w-4 h-4 text-green-400" />,
             children: project.services.replicatedStorage.scripts.map((script: any) => ({
               ...script,
-              icon: <ScriptIcon type={script.type} />
+              icon: <ScriptIcon type={script.type} />,
+              children: script.children || []
             }))
           }] : [])
         ].filter(Boolean)
@@ -95,7 +122,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         children: [
           ...project.services.serverStorage.scripts.map((script: any) => ({
             ...script,
-            icon: <ScriptIcon type={script.type} />
+            icon: <ScriptIcon type={script.type} />,
+            children: script.children || []
           })),
           ...project.services.serverStorage.character?.map((char: any) => ({
             ...char,
@@ -109,9 +137,10 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
                     <Image className="w-4 h-4 text-purple-400" />,
               children: child.children?.map((grandchild: any) => ({
                 ...grandchild,
-                icon: <ScriptIcon type={grandchild.type} />
-              }))
-            }))
+                icon: <ScriptIcon type={grandchild.type} />,
+                children: grandchild.children || []
+              })) || []
+            })) || []
           })) || []
         ]
       },
@@ -121,7 +150,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         icon: <Database className="w-4 h-4 text-cyan-400" />,
         children: project.services.replicatedFirst.databases.map((db: any) => ({
           ...db,
-          icon: <ScriptIcon type={db.type} />
+          icon: <ScriptIcon type={db.type} />,
+          children: db.children || []
         }))
       }] : []),
       {
@@ -142,7 +172,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         icon: <Monitor className="w-4 h-4 text-pink-400" />,
         children: project.services.uiService.screens.map((screen: any) => ({
           ...screen,
-          icon: <Monitor className="w-4 h-4 text-pink-400" />
+          icon: <Monitor className="w-4 h-4 text-pink-400" />,
+          children: screen.children || []
         }))
       }] : [])
     ].filter(Boolean);
@@ -154,16 +185,171 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         name: 'THREEDStorage',
         icon: <Box className="w-4 h-4 text-purple-600" />,
         children: [
-          { id: '3d1', name: 'Character.obj', type: '3dobject', icon: <Box className="w-4 h-4 text-purple-600" />, url: '/models/character.obj' },
-          { id: '3d2', name: 'Terrain.obj', type: '3dobject', icon: <Box className="w-4 h-4 text-purple-600" />, url: '/models/terrain.obj' }
+          { id: '3d1', name: 'Character.obj', type: '3dobject', icon: <Box className="w-4 h-4 text-purple-600" />, url: '/models/character.obj', children: [] },
+          { id: '3d2', name: 'Terrain.obj', type: '3dobject', icon: <Box className="w-4 h-4 text-purple-600" />, url: '/models/terrain.obj', children: [] }
         ]
       });
     }
 
     return services;
+  }
+
+  const getFilteredObjectTypes = (parentType: string) => {
+    return objectTypes.filter(type => {
+      const matchesSearch = type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           type.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const allowedForParent = type.allowedParents.includes(parentType) || 
+                              type.allowedParents.includes('folder') && parentType === 'folder';
+      return matchesSearch && allowedForParent;
+    });
   };
 
-  const services = buildServicesFromProject();
+  const addObjectToHierarchy = (type: string, parentPath: string[]) => {
+    const newObject = {
+      id: `${type}_${Date.now()}`,
+      name: type.charAt(0).toUpperCase() + type.slice(1),
+      type,
+      icon: getIconForType(type),
+      children: [],
+      content: getDefaultContent(type)
+    };
+
+    // Find parent and add the new object
+    const updatedServices = [...services];
+    let current: any = updatedServices;
+    
+    for (let i = 0; i < parentPath.length; i++) {
+      const pathSegment = parentPath[i];
+      if (i === 0) {
+        current = current.find((service: any) => service.id === pathSegment);
+      } else {
+        current = current.children.find((child: any) => child.id === pathSegment);
+      }
+    }
+
+    if (current) {
+      if (!current.children) current.children = [];
+      current.children.push(newObject);
+      setServices(updatedServices);
+    }
+
+    setShowAddMenu(false);
+  };
+
+  const getIconForType = (type: string) => {
+    const iconMap: { [key: string]: JSX.Element } = {
+      'config': <ScriptIcon type="config" />,
+      'model': <Box className="w-4 h-4 text-orange-400" />,
+      'folder': <Folder className="w-4 h-4 text-gray-400" />,
+      'vscript': <ScriptIcon type="vscript" />,
+      'vlscript': <ScriptIcon type="vlscript" />,
+      'vdata': <ScriptIcon type="vdata" />,
+      'ploid': <Box className="w-4 h-4 text-green-400" />,
+      'part': <Box className="w-4 h-4 text-blue-400" />,
+      'sphere': <Box className="w-4 h-4 text-purple-400" />,
+      'cylinder': <Box className="w-4 h-4 text-yellow-400" />,
+      'image': <Image className="w-4 h-4 text-purple-400" />,
+      'sound': <Volume2 className="w-4 h-4 text-yellow-400" />,
+      'video': <Monitor className="w-4 h-4 text-red-400" />,
+      'ui': <Monitor className="w-4 h-4 text-pink-400" />
+    };
+    return iconMap[type] || <FileText className="w-4 h-4 text-gray-400" />;
+  };
+
+  const getDefaultContent = (type: string) => {
+    switch (type) {
+      case 'vscript':
+        return `// Server Script
+print("Server script loaded")
+
+function onPlayerJoin(player)
+    print("Player joined: " + player.name)
+end
+
+game.onPlayerJoin(onPlayerJoin)`;
+      case 'vlscript':
+        return `// Client Script
+print("Client script loaded")
+
+inst player = game.Players.LocalPlayer
+
+function onKeyPress(key)
+    print("Key pressed: " + key)
+end
+
+game.InputService.onKeyPress(onKeyPress)`;
+      case 'vdata':
+        return `-- Database Script
+CREATE TABLE IF NOT EXISTS data (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    value TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+function getData(id)
+    SELECT * FROM data WHERE id = id;
+end`;
+      case 'config':
+        return `-- Configuration
+inst parent = script.Parent
+
+parent.Health = 100
+parent.MaxHealth = 100
+parent.Speed = 16
+
+print("Configuration loaded")`;
+      default:
+        return null;
+    }
+  };
+
+  const deleteObject = (objectPath: string[]) => {
+    const updatedServices = [...services];
+    let current: any = updatedServices;
+    let parent: any = null;
+    let objectIndex = -1;
+
+    // Navigate to the object's parent
+    for (let i = 0; i < objectPath.length - 1; i++) {
+      const pathSegment = objectPath[i];
+      if (i === 0) {
+        current = current.find((service: any) => service.id === pathSegment);
+      } else {
+        current = current.children.find((child: any) => child.id === pathSegment);
+      }
+    }
+
+    // Find the object in its parent's children
+    if (current && current.children) {
+      const lastSegment = objectPath[objectPath.length - 1];
+      objectIndex = current.children.findIndex((child: any) => child.id === lastSegment);
+      if (objectIndex !== -1) {
+        current.children.splice(objectIndex, 1);
+        setServices(updatedServices);
+      }
+    }
+  };
+
+  const renameObject = (objectPath: string[], newName: string) => {
+    const updatedServices = [...services];
+    let current: any = updatedServices;
+
+    // Navigate to the object
+    for (let i = 0; i < objectPath.length; i++) {
+      const pathSegment = objectPath[i];
+      if (i === 0) {
+        current = current.find((service: any) => service.id === pathSegment);
+      } else {
+        current = current.children.find((child: any) => child.id === pathSegment);
+      }
+    }
+
+    if (current) {
+      current.name = newName;
+      setServices(updatedServices);
+    }
+  };
 
   const toggleFolder = (folderId: string) => {
     const newExpanded = new Set(expandedFolders);
@@ -191,10 +377,21 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
     onFileSelect(item);
   };
 
-  const renderTreeItem = (item: any, depth = 0) => {
+  const handleAddButtonClick = (event: React.MouseEvent, item: any, path: string[]) => {
+    event.stopPropagation();
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    setAddMenuPosition({ x: rect.right + 10, y: rect.top });
+    setAddMenuParent({ item, path });
+    setShowAddMenu(true);
+    setSearchTerm('');
+  };
+
+  const renderTreeItem = (item: any, depth = 0, path: string[] = []) => {
+    const currentPath = [...path, item.id];
     const isExpanded = expandedFolders.has(item.id);
     const hasChildren = item.children && item.children.length > 0;
     const isSelected = currentFile?.id === item.id;
+    const canHaveChildren = ['workspace', 'replicatedStorage', 'serverStorage', 'folder', 'model', 'ploid', 'soundService', 'mediaService', 'uiService', 'threedStorage', 'replicatedFirst'].includes(item.id) || item.type === 'folder' || item.type === 'model' || item.type === 'ploid';
 
     return (
       <div key={item.id}>
@@ -222,19 +419,73 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
           )}
           {!hasChildren && <div className="w-4"></div>}
           {item.icon}
-          <span className="flex-1 truncate">{item.name}</span>
+          
+          {editingName === item.id ? (
+            <input
+              type="text"
+              value={item.name}
+              onChange={(e) => renameObject(currentPath, e.target.value)}
+              onBlur={() => setEditingName(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') setEditingName(null);
+                if (e.key === 'Escape') setEditingName(null);
+              }}
+              className="flex-1 px-1 py-0.5 bg-gray-600 border border-gray-500 rounded text-white text-xs"
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="flex-1 truncate">{item.name}</span>
+          )}
+          
           {item.warning && (
             <AlertTriangle className="w-3 h-3 text-yellow-400" />
           )}
-          {!hasChildren && (
-            <button className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-600 rounded transition-opacity">
-              <MoreHorizontal className="w-3 h-3" />
-            </button>
-          )}
+          
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {canHaveChildren && (
+              <button
+                onClick={(e) => handleAddButtonClick(e, item, currentPath)}
+                className="p-0.5 hover:bg-gray-600 rounded transition-colors"
+                title="Add Object"
+              >
+                <Plus className="w-3 h-3 text-gray-400" />
+              </button>
+            )}
+            {!['workspace', 'replicatedStorage', 'serverStorage', 'soundService', 'mediaService', 'uiService', 'threedStorage', 'replicatedFirst'].includes(item.id) && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingName(item.id);
+                  }}
+                  className="p-0.5 hover:bg-gray-600 rounded transition-colors"
+                  title="Rename"
+                >
+                  <Edit2 className="w-3 h-3 text-gray-400" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteObject(currentPath);
+                  }}
+                  className="p-0.5 hover:bg-red-600 rounded transition-colors"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3 h-3 text-gray-400" />
+                </button>
+              </>
+            )}
+            {!hasChildren && !canHaveChildren && (
+              <button className="p-0.5 hover:bg-gray-600 rounded transition-colors">
+                <MoreHorizontal className="w-3 h-3 text-gray-400" />
+              </button>
+            )}
+          </div>
         </div>
         {hasChildren && isExpanded && (
           <div>
-            {item.children.map((child: any) => renderTreeItem(child, depth + 1))}
+            {item.children.map((child: any) => renderTreeItem(child, depth + 1, currentPath))}
           </div>
         )}
       </div>
@@ -265,6 +516,62 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
           <div>• <span className="text-blue-300">Ploid</span> - Character controller</div>
         </div>
       </div>
+
+      {/* Add Object Menu */}
+      {showAddMenu && addMenuParent && (
+        <>
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setShowAddMenu(false)}
+          />
+          <div 
+            className="fixed z-50 bg-gray-800 border border-gray-600 rounded-lg shadow-lg p-4 w-80"
+            style={{ 
+              left: addMenuPosition.x, 
+              top: addMenuPosition.y,
+              maxHeight: '400px',
+              overflowY: 'auto'
+            }}
+          >
+            <div className="mb-3">
+              <h3 className="text-white font-semibold mb-2">
+                Add to {addMenuParent.item.name}
+              </h3>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search objects..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:border-green-400 focus:outline-none"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-1">
+              {getFilteredObjectTypes(addMenuParent.item.id).map((type) => (
+                <button
+                  key={type.id}
+                  onClick={() => addObjectToHierarchy(type.id, addMenuParent.path)}
+                  className="w-full flex items-center gap-3 p-3 bg-gray-700 hover:bg-gray-600 rounded transition-colors text-left"
+                >
+                  <span className="text-lg">{type.icon}</span>
+                  <div className="flex-1">
+                    <div className="text-white font-medium">{type.name}</div>
+                    <div className="text-gray-400 text-xs">{type.description}</div>
+                  </div>
+                </button>
+              ))}
+              {getFilteredObjectTypes(addMenuParent.item.id).length === 0 && (
+                <div className="text-gray-400 text-center py-4">
+                  {searchTerm ? 'No objects match your search' : 'No objects can be added here'}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Warning Modal */}
       {showWarning && (

@@ -45,11 +45,11 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ currentFile }) => {
 
   const getSampleCode = (fileType: string) => {
     switch (fileType) {
-      case 'vscript':
-        return `// Virb.IO Script (.vscript)
-// This script runs on both client and server
+      case 'basic':
+        return `// Virb.IO Basic Script (.basic)
+// This script runs on the server
 
-inst gameManager = ReplicatedStorage.Scripts.GameManager
+inst gameManager = SharedStorage.Scripts.GameManager
 
 function onServerStart() {
     print("Server starting...")
@@ -60,7 +60,7 @@ function onPlayerJoin(player) {
     print("Player joined: " + player.name)
     
     // Setup player data
-    inst playerData = ReplicatedFirst.PlayerData
+    inst playerData = DataVault.PlayerData
     playerData.createPlayer(player.id, player.name)
 }
 
@@ -68,8 +68,8 @@ function onPlayerJoin(player) {
 game.onServerStart(onServerStart)
 game.onPlayerJoin(onPlayerJoin)`;
 
-      case 'vlscript':
-        return `// Virb.IO Local Script (.vlscript)
+      case 'home':
+        return `// Virb.IO Home Script (.home)
 // This script runs only on the client
 
 inst inputService = game.InputService
@@ -101,7 +101,7 @@ inputService.onKeyPress(handleKeyPress)
 game.onHeartbeat(updateUI)
 
 // Initialize client
-print("Client script loaded!")`;
+print("Home script loaded!")`;
 
       case 'vdata':
         return `-- Virb.IO Database Script (.vdata)
@@ -199,7 +199,7 @@ print("Configuration loaded successfully")`;
             <h3 className="text-xl font-semibold text-white mb-2">{currentFile.name}</h3>
             <div className="text-gray-400 space-y-1">
               <p>Type: Image</p>
-              <p>Reference: ReplicatedStorage.Images.{currentFile.name.split('.')[0]}</p>
+              <p>Reference: SharedStorage.Images.{currentFile.name.split('.')[0]}</p>
             </div>
           </div>
         </div>
@@ -217,7 +217,7 @@ print("Configuration loaded successfully")`;
             <div className="text-gray-400 space-y-1 mb-4">
               <p>Type: Audio</p>
               {currentFile.duration && <p>Duration: {currentFile.duration}</p>}
-              <p>Reference: ReplicatedStorage.Sounds.{currentFile.name.split('.')[0]}</p>
+              <p>Reference: SharedStorage.Sounds.{currentFile.name.split('.')[0]}</p>
             </div>
             <button className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors mx-auto">
               <Play className="w-4 h-4" />
@@ -268,9 +268,9 @@ print("Configuration loaded successfully")`;
             <h4 className="text-green-400 font-semibold mb-2">Virb.IO Quick Tips:</h4>
             <ul className="text-sm text-left space-y-1">
               <li>• Use <code className="text-green-300">inst</code> for variables</li>
-              <li>• Reference assets: <code className="text-blue-300">ReplicatedStorage.Images.Icon</code></li>
-              <li>• <code className="text-red-300">.vlscript</code> for client-side code</li>
-              <li>• <code className="text-green-300">.vscript</code> for server-side code</li>
+              <li>• Reference assets: <code className="text-blue-300">SharedStorage.Images.Icon</code></li>
+              <li>• <code className="text-red-300">.home</code> for client-side code</li>
+              <li>• <code className="text-green-300">.basic</code> for server-side code</li>
               <li>• <code className="text-yellow-300">.vdata</code> for databases</li>
               <li>• <code className="text-blue-300">Config</code> for object configuration</li>
             </ul>
@@ -295,8 +295,8 @@ print("Configuration loaded successfully")`;
             <span className="font-medium">{currentFile.name}</span>
             {hasUnsavedChanges && <span className="text-yellow-400" title="Auto-saving...">●</span>}
             <span className={`px-2 py-1 rounded text-xs font-semibold ${
-              currentFile.type === 'vscript' ? 'bg-green-600 text-white' :
-              currentFile.type === 'vlscript' ? 'bg-red-600 text-white' :
+              currentFile.type === 'basic' ? 'bg-green-600 text-white' :
+              currentFile.type === 'home' ? 'bg-red-600 text-white' :
               currentFile.type === 'vdata' ? 'bg-yellow-600 text-black' :
               currentFile.type === 'config' ? 'bg-blue-600 text-white' :
               'bg-gray-600 text-white'
@@ -386,7 +386,7 @@ print("Configuration loaded successfully")`;
             <div>
               <h4 className="text-white font-semibold mb-1">Variables & References</h4>
               <code className="text-green-300">inst player = Workspace.Player</code><br/>
-              <code className="text-blue-300">ReplicatedStorage.Images.Icon</code>
+              <code className="text-blue-300">SharedStorage.Images.Icon</code>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-1">Functions</h4>

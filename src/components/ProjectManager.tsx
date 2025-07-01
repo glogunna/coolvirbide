@@ -53,12 +53,12 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
           { id: 'bgm1', name: 'BackgroundMusic.mp3', type: 'sound', duration: '3:24' }
         ] : [],
         scripts: type !== 'blank' ? [
-          { id: 'gameManager', name: type === 'webapp' ? 'AppManager.vscript' : 'GameManager.vscript', type: 'vscript', content: getTemplateScript(type, 'gameManager') }
+          { id: 'gameManager', name: type === 'webapp' ? 'AppManager.basic' : 'GameManager.basic', type: 'basic', content: getTemplateScript(type, 'gameManager') }
         ] : []
       },
       serverStorage: {
         scripts: type !== 'blank' ? [
-          { id: 'serverInit', name: 'ServerInit.vscript', type: 'vscript', content: getTemplateScript(type, 'serverInit') }
+          { id: 'serverInit', name: 'ServerInit.basic', type: 'basic', content: getTemplateScript(type, 'serverInit') }
         ] : [],
         character: type.includes('game') ? [
           { 
@@ -87,22 +87,22 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
               },
               {
                 id: 'inputScript',
-                name: 'InputHandler.vlscript',
-                type: 'vlscript',
+                name: 'InputHandler.home',
+                type: 'home',
                 content: getTemplateScript(type, 'inputHandler'),
                 warning: true
               },
               {
                 id: 'cameraScript',
-                name: 'CameraController.vlscript',
-                type: 'vlscript',
+                name: 'CameraController.home',
+                type: 'home',
                 content: getTemplateScript(type, 'cameraController'),
                 warning: true
               },
               {
                 id: 'movementScript',
-                name: 'MovementController.vlscript',
-                type: 'vlscript',
+                name: 'MovementController.home',
+                type: 'home',
                 content: getTemplateScript(type, 'movementController'),
                 warning: true
               }
@@ -205,7 +205,7 @@ print("Workspace configured for " + workspace.DisplayMode + " mode")`;
         if (projectType === 'webapp') {
           return `// Web Application Manager
 inst apiService = game.APIService
-inst database = ReplicatedFirst.AppData
+inst database = DataVault.AppData
 
 function initApp() {
     print("Initializing Web Application...")
@@ -276,7 +276,7 @@ game.onStart(initGame)`;
       case 'serverInit':
         if (projectType === 'webapp') {
           return `// Server Initialization
-inst appManager = ReplicatedStorage.Scripts.AppManager
+inst appManager = SharedStorage.Scripts.AppManager
 
 function onServerStart() {
     print("Server starting...")
@@ -287,7 +287,7 @@ function onUserConnect(user) {
     print("User connected: " + user.name)
     
     // Setup user data
-    inst appData = ReplicatedFirst.AppData
+    inst appData = DataVault.AppData
     appData.createUser(user.id, user.name)
 }
 
@@ -295,7 +295,7 @@ game.onServerStart(onServerStart)
 game.onUserConnect(onUserConnect)`;
         } else {
           return `// Server Initialization
-inst gameManager = ReplicatedStorage.Scripts.GameManager
+inst gameManager = SharedStorage.Scripts.GameManager
 
 function onServerStart() {
     print("Server starting...")
@@ -306,11 +306,11 @@ function onPlayerJoin(player) {
     print("Player joined: " + player.name)
     
     // Setup player data
-    inst playerData = ReplicatedFirst.PlayerData
+    inst playerData = DataVault.PlayerData
     playerData.createPlayer(player.id, player.name)
     
     // Spawn player with starter character
-    inst starterChar = ServerStorage.Character1
+    inst starterChar = PrivateStorage.Character1
     player.spawn(starterChar)
 }
 
@@ -369,7 +369,7 @@ ploid.OnDied = game.CreateEvent()
 
 print("Ploid configured successfully")`;
       case 'inputHandler':
-        return `-- Input Handler (Client Script)
+        return `-- Input Handler (Home Script)
 -- WARNING: Modifying this script may cause player movement issues!
 
 inst inputService = game.InputService
@@ -408,7 +408,7 @@ end
 inputService.onKeyDown(onKeyDown)
 inputService.onKeyUp(onKeyUp)`;
       case 'cameraController':
-        return `-- Camera Controller (Client Script)
+        return `-- Camera Controller (Home Script)
 -- WARNING: Modifying this script may cause camera issues!
 
 inst camera = Workspace.Camera
@@ -458,7 +458,7 @@ character.SetCameraType = setCameraType
 game.onHeartbeat(updateCamera)
 mouse.onMove(onMouseMove)`;
       case 'movementController':
-        return `-- Movement Controller (Client Script)
+        return `-- Movement Controller (Home Script)
 -- WARNING: Modifying this script may cause movement issues!
 
 inst player = game.Players.LocalPlayer
@@ -785,6 +785,9 @@ function addExperience(playerId, exp) {
                       <li>• Complete service hierarchy</li>
                       <li>• Database schema</li>
                       <li>• UI templates</li>
+                      <li>• <span className="text-green-300">SharedStorage</span> - Shared assets & scripts</li>
+                      <li>• <span className="text-orange-300">PrivateStorage</span> - Server-only content</li>
+                      <li>• <span className="text-cyan-300">DataVault</span> - Database storage</li>
                     </>
                   )}
                 </ul>

@@ -126,7 +126,7 @@ export const AssetManager: React.FC = () => {
       <div className="mt-4 p-3 bg-gray-700/50 rounded-lg">
         <h3 className="text-sm font-semibold text-green-400 mb-2">Reference in Code:</h3>
         <code className="text-xs text-gray-300">
-          inst myImage = ReplicatedStorage.Images.PlayerIcon
+          inst myImage = SharedStorage.Images.PlayerIcon
         </code>
       </div>
     </div>

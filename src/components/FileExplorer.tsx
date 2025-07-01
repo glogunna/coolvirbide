@@ -11,8 +11,8 @@ interface FileExplorerProps {
 const ScriptIcon: React.FC<{ type: string }> = ({ type }) => {
   const getColor = () => {
     switch (type) {
-      case 'vscript': return 'bg-green-500';
-      case 'vlscript': return 'bg-red-500';
+      case 'basic': return 'bg-green-500';
+      case 'home': return 'bg-red-500';
       case 'vdata': return 'bg-yellow-500';
       case 'config': return 'bg-blue-500';
       default: return 'bg-gray-500';
@@ -28,7 +28,7 @@ const ScriptIcon: React.FC<{ type: string }> = ({ type }) => {
 };
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, currentFile, project, installedPlugins }) => {
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root', 'workspace', 'replicatedStorage', 'serverStorage']));
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root', 'workspace', 'sharedStorage', 'privateStorage']));
   const [showWarning, setShowWarning] = useState<string | null>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [addMenuPosition, setAddMenuPosition] = useState({ x: 0, y: 0 });
@@ -43,10 +43,35 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
 
   // Protected items that cannot be deleted or renamed
   const protectedItems = new Set([
-    'workspace', 'replicatedStorage', 'serverStorage', 'soundService', 
-    'mediaService', 'uiService', 'threedStorage', 'replicatedFirst',
+    'workspace', 'sharedStorage', 'privateStorage', 'soundService', 
+    'mediaService', 'uiService', 'threedStorage', 'dataVault',
     'workspace-view', 'baseplate'
   ]);
+
+  const objectTypes = [
+    { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties' },
+    { id: 'model', name: 'Model', icon: '🏗️', description: 'Container for 3D objects' },
+    { id: 'folder', name: 'Folder', icon: '📁', description: 'Organize objects in folders' },
+    { id: 'basic', name: 'Basic Script', icon: '📜', description: 'Server-side script (.basic)' },
+    { id: 'home', name: 'Home Script', icon: '📋', description: 'Client-side script (.home)' },
+    { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script (.vdata)' },
+    { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller' },
+    { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block' },
+    { id: 'sphere', name: 'Sphere', icon: '⚪', description: '3D sphere' },
+    { id: 'cylinder', name: 'Cylinder', icon: '🥫', description: '3D cylinder' },
+    { id: 'image', name: 'Image/Texture', icon: '🖼️', description: 'Image or texture file' },
+    { id: 'sound', name: 'Sound', icon: '🔊', description: 'Audio file' },
+    { id: 'video', name: 'Video', icon: '🎬', description: 'Video file' },
+    { id: 'ui', name: 'UI Screen', icon: '📱', description: 'User interface screen' }
+  ];
+
+  const getFilteredObjectTypes = () => {
+    return objectTypes.filter(type => {
+      const matchesSearch = type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           type.description.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesSearch;
+    });
+  };
 
   function buildServicesFromProject() {
     const services = [
@@ -71,12 +96,12 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         ]
       },
       {
-        id: 'replicatedStorage',
-        name: 'ReplicatedStorage',
+        id: 'sharedStorage',
+        name: 'SharedStorage',
         icon: <Folder className="w-4 h-4 text-blue-400" />,
         children: [
           ...(project.services.replicatedStorage.images.length > 0 ? [{
-            id: 'rs-images',
+            id: 'ss-images',
             name: 'Images',
             icon: <Image className="w-4 h-4 text-purple-400" />,
             children: project.services.replicatedStorage.images.map((img: any) => ({
@@ -86,7 +111,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             }))
           }] : []),
           ...(project.services.replicatedStorage.sounds.length > 0 ? [{
-            id: 'rs-sounds',
+            id: 'ss-sounds',
             name: 'Sounds',
             icon: <Volume2 className="w-4 h-4 text-yellow-400" />,
             children: project.services.replicatedStorage.sounds.map((sound: any) => ({
@@ -96,25 +121,27 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             }))
           }] : []),
           ...(project.services.replicatedStorage.scripts.length > 0 ? [{
-            id: 'rs-scripts',
+            id: 'ss-scripts',
             name: 'Scripts',
             icon: <Folder className="w-4 h-4 text-green-400" />,
             children: project.services.replicatedStorage.scripts.map((script: any) => ({
               ...script,
-              icon: <ScriptIcon type={script.type} />,
+              type: script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type,
+              icon: <ScriptIcon type={script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type} />,
               children: script.children || []
             }))
           }] : [])
         ].filter(Boolean)
       },
       {
-        id: 'serverStorage',
-        name: 'ServerStorage',
+        id: 'privateStorage',
+        name: 'PrivateStorage',
         icon: <Folder className="w-4 h-4 text-orange-400" />,
         children: [
           ...project.services.serverStorage.scripts.map((script: any) => ({
             ...script,
-            icon: <ScriptIcon type={script.type} />,
+            type: script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type,
+            icon: <ScriptIcon type={script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type} />,
             children: script.children || []
           })),
           ...project.services.serverStorage.character?.map((char: any) => ({
@@ -122,14 +149,16 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             icon: <Folder className="w-4 h-4 text-cyan-400" />,
             children: char.children?.map((child: any) => ({
               ...child,
+              type: child.type === 'vlscript' ? 'home' : child.type,
               icon: child.type === 'ploid' ? <Box className="w-4 h-4 text-green-400" /> : 
                     child.type === '3dobject' ? <Box className="w-4 h-4 text-indigo-400" /> :
-                    child.type === 'vlscript' ? <ScriptIcon type={child.type} /> :
+                    child.type === 'vlscript' ? <ScriptIcon type="home" /> :
                     child.type === 'config' ? <ScriptIcon type={child.type} /> :
                     <Image className="w-4 h-4 text-purple-400" />,
               children: child.children?.map((grandchild: any) => ({
                 ...grandchild,
-                icon: <ScriptIcon type={grandchild.type} />,
+                type: grandchild.type === 'vscript' ? 'basic' : grandchild.type === 'vlscript' ? 'home' : grandchild.type,
+                icon: <ScriptIcon type={grandchild.type === 'vscript' ? 'basic' : grandchild.type === 'vlscript' ? 'home' : grandchild.type} />,
                 children: grandchild.children || []
               })) || []
             })) || []
@@ -137,8 +166,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         ]
       },
       ...(project.services.replicatedFirst.databases.length > 0 ? [{
-        id: 'replicatedFirst',
-        name: 'ReplicatedFirst',
+        id: 'dataVault',
+        name: 'DataVault',
         icon: <Database className="w-4 h-4 text-cyan-400" />,
         children: project.services.replicatedFirst.databases.map((db: any) => ({
           ...db,
@@ -187,31 +216,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
   }
 
   const [services, setServices] = useState(() => buildServicesFromProject());
-
-  const objectTypes = [
-    { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties' },
-    { id: 'model', name: 'Model', icon: '🏗️', description: 'Container for 3D objects' },
-    { id: 'folder', name: 'Folder', icon: '📁', description: 'Organize objects in folders' },
-    { id: 'vscript', name: 'Server Script', icon: '📜', description: 'Server-side script (.vscript)' },
-    { id: 'vlscript', name: 'Client Script', icon: '📋', description: 'Client-side script (.vlscript)' },
-    { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script (.vdata)' },
-    { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller' },
-    { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block' },
-    { id: 'sphere', name: 'Sphere', icon: '⚪', description: '3D sphere' },
-    { id: 'cylinder', name: 'Cylinder', icon: '🥫', description: '3D cylinder' },
-    { id: 'image', name: 'Image/Texture', icon: '🖼️', description: 'Image or texture file' },
-    { id: 'sound', name: 'Sound', icon: '🔊', description: 'Audio file' },
-    { id: 'video', name: 'Video', icon: '🎬', description: 'Video file' },
-    { id: 'ui', name: 'UI Screen', icon: '📱', description: 'User interface screen' }
-  ];
-
-  const getFilteredObjectTypes = () => {
-    return objectTypes.filter(type => {
-      const matchesSearch = type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           type.description.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
-    });
-  };
 
   const addObjectToHierarchy = (type: string, parentPath: string[]) => {
     const newObject = {
@@ -287,8 +291,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
       'config': <ScriptIcon type="config" />,
       'model': <Box className="w-4 h-4 text-orange-400" />,
       'folder': <Folder className="w-4 h-4 text-gray-400" />,
-      'vscript': <ScriptIcon type="vscript" />,
-      'vlscript': <ScriptIcon type="vlscript" />,
+      'basic': <ScriptIcon type="basic" />,
+      'home': <ScriptIcon type="home" />,
       'vdata': <ScriptIcon type="vdata" />,
       'ploid': <Box className="w-4 h-4 text-green-400" />,
       'part': <Box className="w-4 h-4 text-blue-400" />,
@@ -304,18 +308,18 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
 
   const getDefaultContent = (type: string) => {
     switch (type) {
-      case 'vscript':
-        return `// Server Script
-print("Server script loaded")
+      case 'basic':
+        return `// Basic Script (Server)
+print("Basic script loaded")
 
 function onPlayerJoin(player)
     print("Player joined: " + player.name)
 end
 
 game.onPlayerJoin(onPlayerJoin)`;
-      case 'vlscript':
-        return `// Client Script
-print("Client script loaded")
+      case 'home':
+        return `// Home Script (Client)
+print("Home script loaded")
 
 inst player = game.Players.LocalPlayer
 
@@ -420,7 +424,7 @@ print("Configuration loaded")`;
   };
 
   const handleFileClick = (item: any) => {
-    if (item.warning && (item.type === 'vlscript' || item.type === 'vscript')) {
+    if (item.warning && (item.type === 'home' || item.type === 'basic')) {
       setShowWarning(item.id);
       return;
     }
@@ -640,9 +644,9 @@ print("Configuration loaded")`;
       <div className="mt-6 p-3 bg-gray-700/50 rounded-lg">
         <h3 className="text-sm font-semibold text-green-400 mb-2">Virb.IO Reference</h3>
         <div className="text-xs text-gray-400 space-y-1">
-          <div>• <span className="text-green-300">inst</span> variable = ReplicatedStorage.Images.Image1</div>
-          <div>• <span className="text-red-300">.vlscript</span> - Client scripts</div>
-          <div>• <span className="text-green-300">.vscript</span> - Server scripts</div>
+          <div>• <span className="text-green-300">inst</span> variable = SharedStorage.Images.Image1</div>
+          <div>• <span className="text-red-300">.home</span> - Client scripts</div>
+          <div>• <span className="text-green-300">.basic</span> - Server scripts</div>
           <div>• <span className="text-yellow-300">.vdata</span> - Database scripts</div>
           <div>• <span className="text-blue-300">Config</span> - Configuration object</div>
           <div>• <span className="text-blue-300">Ploid</span> - Character controller</div>

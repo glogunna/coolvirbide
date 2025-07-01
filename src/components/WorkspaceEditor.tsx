@@ -11,8 +11,12 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
   const sceneRef = useRef<THREE.Scene>();
   const rendererRef = useRef<THREE.WebGLRenderer>();
   const cameraRef = useRef<THREE.PerspectiveCamera>();
+  const raycasterRef = useRef<THREE.Raycaster>();
+  const mouseRef = useRef<THREE.Vector2>();
   const [selectedObject, setSelectedObject] = useState<any>(null);
   const [tool, setTool] = useState('move');
+  const [objects, setObjects] = useState<any[]>([]);
+  const [keys, setKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -35,6 +39,12 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     rendererRef.current = renderer;
 
+    // Raycaster for object selection
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    raycasterRef.current = raycaster;
+    mouseRef.current = mouse;
+
     mountRef.current.appendChild(renderer.domElement);
 
     // Lighting
@@ -55,9 +65,15 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     baseplate.position.y = -0.5;
     baseplate.receiveShadow = true;
     baseplate.name = 'Baseplate';
+    baseplate.userData = { id: 'baseplate', name: 'Baseplate', type: '3dobject' };
     scene.add(baseplate);
 
-    // Add some example objects
+    // Initialize objects array
+    const initialObjects = [
+      { id: 'baseplate', name: 'Baseplate', type: '3dobject', mesh: baseplate, visible: true }
+    ];
+
+    // Add some example objects if it's a game project
     if (project.type === 'game3d') {
       // Add a cube
       const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
@@ -66,6 +82,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       cube.position.set(0, 1, 0);
       cube.castShadow = true;
       cube.name = 'Part';
+      cube.userData = { id: 'part1', name: 'Part', type: '3dobject' };
       scene.add(cube);
 
       // Add a sphere
@@ -75,21 +92,43 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       sphere.position.set(5, 1, 0);
       sphere.castShadow = true;
       sphere.name = 'Ball';
+      sphere.userData = { id: 'ball1', name: 'Ball', type: '3dobject' };
       scene.add(sphere);
+
+      initialObjects.push(
+        { id: 'part1', name: 'Part', type: '3dobject', mesh: cube, visible: true },
+        { id: 'ball1', name: 'Ball', type: '3dobject', mesh: sphere, visible: true }
+      );
     }
+
+    setObjects(initialObjects);
 
     // Grid helper
     const gridHelper = new THREE.GridHelper(50, 50);
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Controls (basic mouse interaction)
+    // Mouse controls
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
 
     const onMouseDown = (event: MouseEvent) => {
-      isDragging = true;
-      previousMousePosition = { x: event.clientX, y: event.clientY };
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(scene.children.filter(obj => obj.userData.id));
+
+      if (intersects.length > 0) {
+        const clickedObject = intersects[0].object;
+        const objectData = initialObjects.find(obj => obj.id === clickedObject.userData.id);
+        setSelectedObject(objectData);
+      } else {
+        setSelectedObject(null);
+        isDragging = true;
+        previousMousePosition = { x: event.clientX, y: event.clientY };
+      }
     };
 
     const onMouseMove = (event: MouseEvent) => {
@@ -100,11 +139,11 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         y: event.clientY - previousMousePosition.y
       };
 
-      // Rotate camera around the scene
+      // Rotate camera around the scene (fixed inversion)
       const spherical = new THREE.Spherical();
       spherical.setFromVector3(camera.position);
-      spherical.theta -= deltaMove.x * 0.01;
-      spherical.phi += deltaMove.y * 0.01;
+      spherical.theta += deltaMove.x * 0.01; // Fixed: removed negative sign
+      spherical.phi -= deltaMove.y * 0.01; // Fixed: changed to minus
       spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
 
       camera.position.setFromSpherical(spherical);
@@ -126,14 +165,53 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       camera.lookAt(0, 0, 0);
     };
 
+    // Keyboard controls for WASD movement
+    const onKeyDown = (event: KeyboardEvent) => {
+      setKeys(prev => new Set(prev).add(event.key.toLowerCase()));
+    };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      setKeys(prev => {
+        const newKeys = new Set(prev);
+        newKeys.delete(event.key.toLowerCase());
+        return newKeys;
+      });
+    };
+
     renderer.domElement.addEventListener('mousedown', onMouseDown);
     renderer.domElement.addEventListener('mousemove', onMouseMove);
     renderer.domElement.addEventListener('mouseup', onMouseUp);
     renderer.domElement.addEventListener('wheel', onWheel);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    // Camera movement with WASD
+    const moveCamera = () => {
+      const moveSpeed = 0.5;
+      const forward = new THREE.Vector3();
+      const right = new THREE.Vector3();
+      
+      camera.getWorldDirection(forward);
+      right.crossVectors(forward, camera.up);
+      
+      if (keys.has('w')) {
+        camera.position.addScaledVector(forward, moveSpeed);
+      }
+      if (keys.has('s')) {
+        camera.position.addScaledVector(forward, -moveSpeed);
+      }
+      if (keys.has('a')) {
+        camera.position.addScaledVector(right, -moveSpeed);
+      }
+      if (keys.has('d')) {
+        camera.position.addScaledVector(right, moveSpeed);
+      }
+    };
 
     // Animation loop
     const animate = () => {
       requestAnimationFrame(animate);
+      moveCamera();
       renderer.render(scene, camera);
     };
     animate();
@@ -142,9 +220,11 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       if (mountRef.current && renderer.domElement) {
         mountRef.current.removeChild(renderer.domElement);
       }
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
       renderer.dispose();
     };
-  }, [project]);
+  }, [project, keys]);
 
   const addObject = (type: string) => {
     if (!sceneRef.current) return;
@@ -174,6 +254,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     }
 
     const mesh = new THREE.Mesh(geometry, material);
+    const id = `${type}_${Date.now()}`;
     mesh.position.set(
       (Math.random() - 0.5) * 10,
       2,
@@ -181,13 +262,57 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     );
     mesh.castShadow = true;
     mesh.name = name;
+    mesh.userData = { id, name, type: '3dobject' };
     sceneRef.current.add(mesh);
+
+    const newObject = { id, name, type: '3dobject', mesh, visible: true };
+    setObjects(prev => [...prev, newObject]);
+  };
+
+  const deleteObject = (id: string) => {
+    if (id === 'baseplate') return; // Don't allow deleting baseplate
+    
+    const objectToDelete = objects.find(obj => obj.id === id);
+    if (objectToDelete && sceneRef.current) {
+      sceneRef.current.remove(objectToDelete.mesh);
+      setObjects(prev => prev.filter(obj => obj.id !== id));
+      if (selectedObject?.id === id) {
+        setSelectedObject(null);
+      }
+    }
+  };
+
+  const toggleVisibility = (id: string) => {
+    const obj = objects.find(o => o.id === id);
+    if (obj) {
+      obj.visible = !obj.visible;
+      obj.mesh.visible = obj.visible;
+      setObjects([...objects]);
+    }
   };
 
   const resetCamera = () => {
     if (!cameraRef.current) return;
     cameraRef.current.position.set(10, 10, 10);
     cameraRef.current.lookAt(0, 0, 0);
+  };
+
+  const updateObjectProperty = (id: string, property: string, value: any) => {
+    const obj = objects.find(o => o.id === id);
+    if (obj && obj.mesh) {
+      if (property === 'name') {
+        obj.name = value;
+        obj.mesh.name = value;
+        obj.mesh.userData.name = value;
+      } else if (property.startsWith('position.')) {
+        const axis = property.split('.')[1];
+        obj.mesh.position[axis as 'x' | 'y' | 'z'] = value;
+      }
+      setObjects([...objects]);
+      if (selectedObject?.id === id) {
+        setSelectedObject({ ...obj });
+      }
+    }
   };
 
   return (
@@ -257,7 +382,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         {/* Camera Controls Info */}
         <div className="absolute bottom-4 left-4 bg-black bg-opacity-70 text-white p-3 rounded-lg text-sm">
           <div className="space-y-1">
-            <div>Mouse: Rotate camera</div>
+            <div>Mouse Drag: Rotate camera</div>
+            <div>WASD: Move camera</div>
             <div>Scroll: Zoom in/out</div>
             <div>Click objects to select</div>
           </div>
@@ -270,27 +396,41 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         
         <div className="space-y-4">
           <div>
-            <h4 className="text-md font-semibold text-white mb-2">Scene Objects</h4>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
-                <span className="text-sm">Baseplate</span>
-                <div className="flex gap-1">
-                  <button className="p-1 hover:bg-gray-600 rounded">
-                    <Eye className="w-3 h-3" />
-                  </button>
+            <h4 className="text-md font-semibold text-white mb-2">Scene Objects ({objects.length})</h4>
+            <div className="space-y-1 max-h-64 overflow-y-auto">
+              {objects.map((obj) => (
+                <div
+                  key={obj.id}
+                  className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
+                    selectedObject?.id === obj.id ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
+                  }`}
+                  onClick={() => setSelectedObject(obj)}
+                >
+                  <span className="text-sm text-white">{obj.name}</span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleVisibility(obj.id);
+                      }}
+                      className="p-1 hover:bg-gray-600 rounded"
+                    >
+                      {obj.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                    </button>
+                    {obj.id !== 'baseplate' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteObject(obj.id);
+                        }}
+                        className="p-1 hover:bg-red-600 rounded"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
-                <span className="text-sm">Part</span>
-                <div className="flex gap-1">
-                  <button className="p-1 hover:bg-gray-600 rounded">
-                    <Eye className="w-3 h-3" />
-                  </button>
-                  <button className="p-1 hover:bg-red-600 rounded">
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
@@ -302,7 +442,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
                   <label className="block text-sm text-gray-300 mb-1">Name</label>
                   <input
                     type="text"
-                    value={selectedObject.name || ''}
+                    value={selectedObject.name}
+                    onChange={(e) => updateObjectProperty(selectedObject.id, 'name', e.target.value)}
                     className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                   />
                 </div>
@@ -312,6 +453,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
                     <input
                       type="number"
                       step="0.1"
+                      value={selectedObject.mesh?.position.x.toFixed(1) || 0}
+                      onChange={(e) => updateObjectProperty(selectedObject.id, 'position.x', parseFloat(e.target.value))}
                       className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                     />
                   </div>
@@ -320,6 +463,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
                     <input
                       type="number"
                       step="0.1"
+                      value={selectedObject.mesh?.position.y.toFixed(1) || 0}
+                      onChange={(e) => updateObjectProperty(selectedObject.id, 'position.y', parseFloat(e.target.value))}
                       className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                     />
                   </div>
@@ -328,6 +473,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
                     <input
                       type="number"
                       step="0.1"
+                      value={selectedObject.mesh?.position.z.toFixed(1) || 0}
+                      onChange={(e) => updateObjectProperty(selectedObject.id, 'position.z', parseFloat(e.target.value))}
                       className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                     />
                   </div>

@@ -28,32 +28,24 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ currentFile }) => {
         return `// Virb.IO Script (.vscript)
 // This script runs on both client and server
 
-inst player = Workspace.Player
-inst playerController = ReplicatedStorage.Scripts.PlayerController
+inst gameManager = ReplicatedStorage.Scripts.GameManager
+
+function onServerStart() {
+    print("Server starting...")
+    gameManager.initGame()
+}
 
 function onPlayerJoin(player) {
     print("Player joined: " + player.name)
     
-    // Create UI for player
-    inst mainUI = UIService.MainMenu
-    mainUI.show(player)
-    
-    // Play welcome sound
-    inst welcomeSound = SoundService.WelcomeSound
-    welcomeSound.play()
-}
-
-function updatePlayerPosition(x, y, z) {
-    player.position = { x: x, y: y, z: z }
-    
-    // Update database
+    // Setup player data
     inst playerData = ReplicatedFirst.PlayerData
-    playerData.updatePosition(player.id, x, y, z)
+    playerData.createPlayer(player.id, player.name)
 }
 
 // Event listeners
-game.onPlayerJoin(onPlayerJoin)
-player.onMove(updatePlayerPosition)`;
+game.onServerStart(onServerStart)
+game.onPlayerJoin(onPlayerJoin)`;
 
       case 'vlscript':
         return `// Virb.IO Local Script (.vlscript)
@@ -94,42 +86,68 @@ print("Client script loaded!")`;
         return `-- Virb.IO Database Script (.vdata)
 -- SQL-like syntax for database operations
 
-CREATE TABLE IF NOT EXISTS players (
+CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
-    level INTEGER DEFAULT 1,
-    experience INTEGER DEFAULT 0,
-    position_x REAL DEFAULT 0,
-    position_y REAL DEFAULT 0,
-    position_z REAL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    email TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS game_stats (
+CREATE TABLE IF NOT EXISTS app_data (
     id INTEGER PRIMARY KEY,
-    player_id INTEGER,
-    score INTEGER DEFAULT 0,
-    playtime INTEGER DEFAULT 0,
-    last_login TIMESTAMP,
-    FOREIGN KEY (player_id) REFERENCES players(id)
+    user_id INTEGER,
+    data_key TEXT NOT NULL,
+    data_value TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 -- Functions available in Virb.IO
-function getPlayer(playerId) {
-    SELECT * FROM players WHERE id = playerId;
+function createUser(userId, username, email) {
+    INSERT INTO users (id, username, email) VALUES (userId, username, email);
 }
 
-function updatePlayerPosition(playerId, x, y, z) {
-    UPDATE players 
-    SET position_x = x, position_y = y, position_z = z 
-    WHERE id = playerId;
+function getUserData(userId, key) {
+    SELECT data_value FROM app_data WHERE user_id = userId AND data_key = key;
 }
 
-function addExperience(playerId, exp) {
-    UPDATE players 
-    SET experience = experience + exp 
-    WHERE id = playerId;
+function setUserData(userId, key, value) {
+    INSERT OR REPLACE INTO app_data (user_id, data_key, data_value) 
+    VALUES (userId, key, value);
 }`;
+
+      case 'config':
+        return `-- Configuration Script
+-- This script configures object properties and behavior
+
+inst parent = script.Parent
+
+-- Configuration Properties
+parent.MaxHealth = 100
+parent.Health = 100
+parent.WalkSpeed = 16
+parent.JumpPower = 50
+
+-- Custom Functions
+function parent.TakeDamage(amount)
+    parent.Health = math.max(0, parent.Health - amount)
+    if parent.Health <= 0 then
+        parent.OnDestroyed:Fire()
+    end
+    parent.HealthChanged:Fire(parent.Health, parent.MaxHealth)
+end
+
+function parent.Heal(amount)
+    parent.Health = math.min(parent.MaxHealth, parent.Health + amount)
+    parent.HealthChanged:Fire(parent.Health, parent.MaxHealth)
+end
+
+-- Events
+parent.HealthChanged = game.CreateEvent()
+parent.OnDestroyed = game.CreateEvent()
+
+print("Configuration loaded successfully")`;
 
       default:
         return '// Select a file to start editing';
@@ -145,7 +163,7 @@ function addExperience(playerId, exp) {
 
     return text
       .replace(/\b(inst|function|if|else|while|for|return|print|CREATE|TABLE|SELECT|UPDATE|INSERT|DELETE|FROM|WHERE)\b/g, '<span style="color: #60A5FA; font-weight: 600;">$1</span>')
-      .replace(/\b(ReplicatedStorage|ServerStorage|Workspace|UIService|SoundService|MediaService|ReplicatedFirst|game|player)\b/g, '<span style="color: #10B981;">$1</span>')
+      .replace(/\b(ReplicatedStorage|ServerStorage|Workspace|UIService|SoundService|MediaService|ReplicatedFirst|game|player|script|Parent)\b/g, '<span style="color: #10B981;">$1</span>')
       .replace(/"([^"]*)"/g, '<span style="color: #FCD34D;">"$1"</span>')
       .replace(/\/\/.*$/gm, '<span style="color: #6B7280;">$&</span>')
       .replace(/--.*$/gm, '<span style="color: #6B7280;">$&</span>')
@@ -240,6 +258,7 @@ function addExperience(playerId, exp) {
               <li>• <code className="text-red-300">.vlscript</code> for client-side code</li>
               <li>• <code className="text-green-300">.vscript</code> for server-side code</li>
               <li>• <code className="text-yellow-300">.vdata</code> for databases</li>
+              <li>• <code className="text-blue-300">Config</code> for object configuration</li>
             </ul>
           </div>
         </div>
@@ -264,6 +283,7 @@ function addExperience(playerId, exp) {
               currentFile.type === 'vscript' ? 'bg-green-600 text-white' :
               currentFile.type === 'vlscript' ? 'bg-red-600 text-white' :
               currentFile.type === 'vdata' ? 'bg-yellow-600 text-black' :
+              currentFile.type === 'config' ? 'bg-blue-600 text-white' :
               'bg-gray-600 text-white'
             }`}>
               {currentFile.type?.toUpperCase()}

@@ -291,13 +291,15 @@ function App() {
                   <h3 className="font-semibold">Database Manager</h3>
                 </div>
                 <div className="space-y-2">
-                  <div className="p-3 bg-gray-700 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                      <span className="text-sm font-medium">main.vdata</span>
+                  {project.services.replicatedFirst.databases.map((db: any) => (
+                    <div key={db.id} className="p-3 bg-gray-700 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                        <span className="text-sm font-medium">{db.name}</span>
+                      </div>
+                      <p className="text-xs text-gray-400">Database connection</p>
                     </div>
-                    <p className="text-xs text-gray-400">Primary database connection</p>
-                  </div>
+                  ))}
                   <button className="w-full p-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm transition-colors">
                     New Database
                   </button>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Infinity, Plus, Folder, Globe, Gamepad2, Smartphone, AlertTriangle } from 'lucide-react';
+import { Infinity, Plus, Folder, Globe, Gamepad2, Smartphone, AlertTriangle, FileText } from 'lucide-react';
 
 interface ProjectManagerProps {
   onCreateProject: (project: any) => void;
@@ -31,10 +31,40 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
       description: 'Full-stack web applications with backend',
       icon: <Globe className="w-8 h-8" />,
       color: 'text-green-400'
+    },
+    {
+      id: 'blank',
+      name: 'Blank Project',
+      description: 'Start with a clean slate - no templates',
+      icon: <FileText className="w-8 h-8" />,
+      color: 'text-gray-400'
     }
   ];
 
   const getProjectTemplate = (type: string) => {
+    if (type === 'blank') {
+      return {
+        replicatedStorage: {
+          images: [],
+          sounds: [],
+          scripts: []
+        },
+        serverStorage: {
+          scripts: [],
+          character: []
+        },
+        replicatedFirst: {
+          databases: []
+        },
+        workspace: {
+          objects: []
+        },
+        uiService: {
+          screens: []
+        }
+      };
+    }
+
     const baseServices = {
       replicatedStorage: {
         images: type === 'game2d' ? [
@@ -42,11 +72,11 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
         ] : type === 'game3d' ? [
           { id: 'texture1', name: 'WoodTexture.jpg', type: 'image', url: 'https://images.pexels.com/photos/129731/pexels-photo-129731.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1' }
         ] : [],
-        sounds: [
+        sounds: type.includes('game') ? [
           { id: 'bgm1', name: 'BackgroundMusic.mp3', type: 'sound', duration: '3:24' }
-        ],
+        ] : [],
         scripts: [
-          { id: 'gameManager', name: 'GameManager.vscript', type: 'vscript', content: getTemplateScript(type, 'gameManager') }
+          { id: 'gameManager', name: type === 'webapp' ? 'AppManager.vscript' : 'GameManager.vscript', type: 'vscript', content: getTemplateScript(type, 'gameManager') }
         ]
       },
       serverStorage: {
@@ -69,7 +99,14 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
                 id: 'ploid',
                 name: 'Ploid',
                 type: 'ploid',
-                content: getTemplateScript(type, 'ploid')
+                children: [
+                  {
+                    id: 'ploidConfig',
+                    name: 'Config',
+                    type: 'config',
+                    content: getTemplateScript(type, 'ploidConfig')
+                  }
+                ]
               },
               {
                 id: 'inputScript',
@@ -97,9 +134,11 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
         ] : []
       },
       replicatedFirst: {
-        databases: [
+        databases: type === 'webapp' ? [
+          { id: 'appData', name: 'AppData.vdata', type: 'vdata', content: getTemplateScript(type, 'database') }
+        ] : type.includes('game') ? [
           { id: 'playerData', name: 'PlayerData.vdata', type: 'vdata', content: getTemplateScript(type, 'database') }
-        ]
+        ] : []
       },
       workspace: {
         objects: type === 'game3d' ? [
@@ -109,9 +148,11 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
         ] : []
       },
       uiService: {
-        screens: [
+        screens: type === 'webapp' ? [
+          { id: 'mainApp', name: 'MainApp', type: 'ui', content: getTemplateUI(type) }
+        ] : type.includes('game') ? [
           { id: 'mainMenu', name: 'MainMenu', type: 'ui', content: getTemplateUI(type) }
-        ]
+        ] : []
       }
     };
 
@@ -121,63 +162,10 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
   const getTemplateScript = (projectType: string, scriptType: string) => {
     switch (scriptType) {
       case 'gameManager':
-        if (projectType === 'game3d') {
-          return `// 3D Game Manager
-inst player = Workspace.Player
-inst camera = Workspace.Camera
-inst baseplate = Workspace.Baseplate
-
-function initGame() {
-    print("Initializing 3D Game...")
-    
-    // Setup 3D environment
-    camera.position = { x: 0, y: 10, z: 20 }
-    camera.lookAt(player.position)
-    
-    // Load starter character from ServerStorage
-    inst starterChar = ServerStorage.Character1.PlayerModel
-    inst ploid = ServerStorage.Character1.Ploid
-    player.setModel(starterChar)
-    player.setPloid(ploid)
-    
-    // Initialize physics
-    player.enablePhysics(true)
-    baseplate.enableCollision(true)
-    
-    // Setup lighting
-    inst lighting = game.Lighting
-    lighting.ambient = 0.6
-    lighting.directional = 0.8
-}
-
-game.onStart(initGame)`;
-        } else if (projectType === 'game2d') {
-          return `// 2D Game Manager
-inst player = Workspace.Player
-inst ground = Workspace.Ground
-inst playerSprite = ServerStorage.Character1.PlayerSprite
-
-function initGame() {
-    print("Initializing 2D Game...")
-    
-    // Setup 2D player
-    player.setSprite(playerSprite)
-    player.position = { x: 400, y: 300 }
-    
-    // Setup 2D physics
-    player.enablePhysics2D(true)
-    ground.enableCollision2D(true)
-    
-    // Setup camera
-    inst camera = Workspace.Camera
-    camera.followTarget(player)
-}
-
-game.onStart(initGame)`;
-        } else {
-          return `// Web App Manager
+        if (projectType === 'webapp') {
+          return `// Web Application Manager
 inst apiService = game.APIService
-inst database = ReplicatedFirst.PlayerData
+inst database = ReplicatedFirst.AppData
 
 function initApp() {
     print("Initializing Web Application...")
@@ -190,7 +178,7 @@ function initApp() {
     database.connect()
     
     // Initialize UI
-    inst mainUI = UIService.MainMenu
+    inst mainUI = UIService.MainApp
     mainUI.show()
 }
 
@@ -205,9 +193,68 @@ function handleData(request) {
 }
 
 game.onStart(initApp)`;
+        } else if (projectType === 'game3d') {
+          return `// 3D Game Manager
+inst camera = Workspace.Camera
+inst baseplate = Workspace.Baseplate
+
+function initGame() {
+    print("Initializing 3D Game...")
+    
+    // Setup 3D environment
+    camera.position = { x: 0, y: 10, z: 20 }
+    camera.lookAt({ x: 0, y: 0, z: 0 })
+    
+    // Initialize physics
+    baseplate.enableCollision(true)
+    
+    // Setup lighting
+    inst lighting = game.Lighting
+    lighting.ambient = 0.6
+    lighting.directional = 0.8
+}
+
+game.onStart(initGame)`;
+        } else if (projectType === 'game2d') {
+          return `// 2D Game Manager
+inst ground = Workspace.Ground
+
+function initGame() {
+    print("Initializing 2D Game...")
+    
+    // Setup 2D physics
+    ground.enableCollision2D(true)
+    
+    // Setup camera
+    inst camera = Workspace.Camera
+    camera.mode = "2D"
+}
+
+game.onStart(initGame)`;
         }
+        break;
       case 'serverInit':
-        return `// Server Initialization
+        if (projectType === 'webapp') {
+          return `// Server Initialization
+inst appManager = ReplicatedStorage.Scripts.AppManager
+
+function onServerStart() {
+    print("Server starting...")
+    appManager.initApp()
+}
+
+function onUserConnect(user) {
+    print("User connected: " + user.name)
+    
+    // Setup user data
+    inst appData = ReplicatedFirst.AppData
+    appData.createUser(user.id, user.name)
+}
+
+game.onServerStart(onServerStart)
+game.onUserConnect(onUserConnect)`;
+        } else {
+          return `// Server Initialization
 inst gameManager = ReplicatedStorage.Scripts.GameManager
 
 function onServerStart() {
@@ -229,57 +276,58 @@ function onPlayerJoin(player) {
 
 game.onServerStart(onServerStart)
 game.onPlayerJoin(onPlayerJoin)`;
-      case 'ploid':
-        return `// Ploid - Character Controller (Similar to Humanoid in Roblox)
--- This object controls character behavior and properties
+        }
+      case 'ploidConfig':
+        return `-- Ploid Configuration Script
+-- This script configures the Ploid (Character Controller)
 
-inst character = script.Parent
-inst health = 100
-inst maxHealth = 100
-inst walkSpeed = 16
-inst jumpPower = 50
+inst ploid = script.Parent
 
-function takeDamage(amount) {
-    health = health - amount
-    if health <= 0 then
-        health = 0
-        onDied()
+-- Health Properties
+ploid.MaxHealth = 100
+ploid.Health = 100
+
+-- Movement Properties
+ploid.WalkSpeed = 16
+ploid.RunSpeed = 24
+ploid.JumpPower = 50
+
+-- Physics Properties
+ploid.Mass = 1
+ploid.Friction = 0.8
+ploid.Elasticity = 0.2
+
+-- Functions
+function ploid.TakeDamage(amount)
+    ploid.Health = math.max(0, ploid.Health - amount)
+    if ploid.Health <= 0 then
+        ploid.OnDied:Fire()
     end
-    character.HealthChanged:Fire(health, maxHealth)
+    ploid.HealthChanged:Fire(ploid.Health, ploid.MaxHealth)
 end
 
-function heal(amount) {
-    health = math.min(health + amount, maxHealth)
-    character.HealthChanged:Fire(health, maxHealth)
+function ploid.Heal(amount)
+    ploid.Health = math.min(ploid.MaxHealth, ploid.Health + amount)
+    ploid.HealthChanged:Fire(ploid.Health, ploid.MaxHealth)
 end
 
-function onDied() {
-    print("Character died!")
-    character.Died:Fire()
-    -- Respawn logic here
+function ploid.SetWalkSpeed(speed)
+    ploid.WalkSpeed = speed
+    ploid.WalkSpeedChanged:Fire(speed)
 end
 
-function setWalkSpeed(speed) {
-    walkSpeed = speed
-    character.WalkSpeedChanged:Fire(walkSpeed)
+function ploid.SetJumpPower(power)
+    ploid.JumpPower = power
+    ploid.JumpPowerChanged:Fire(power)
 end
 
-function setJumpPower(power) {
-    jumpPower = power
-    character.JumpPowerChanged:Fire(jumpPower)
-end
+-- Events
+ploid.HealthChanged = game.CreateEvent()
+ploid.WalkSpeedChanged = game.CreateEvent()
+ploid.JumpPowerChanged = game.CreateEvent()
+ploid.OnDied = game.CreateEvent()
 
--- Expose properties
-character.Health = health
-character.MaxHealth = maxHealth
-character.WalkSpeed = walkSpeed
-character.JumpPower = jumpPower
-
--- Expose functions
-character.TakeDamage = takeDamage
-character.Heal = heal
-character.SetWalkSpeed = setWalkSpeed
-character.SetJumpPower = setJumpPower`;
+print("Ploid configured successfully")`;
       case 'inputHandler':
         return `-- Input Handler (Client Script)
 -- WARNING: Modifying this script may cause player movement issues!
@@ -287,7 +335,7 @@ character.SetJumpPower = setJumpPower`;
 inst inputService = game.InputService
 inst player = game.Players.LocalPlayer
 inst character = player.Character
-inst ploid = character.Ploid
+inst ploidConfig = character.Ploid.Config
 
 inst keysPressed = {}
 
@@ -295,15 +343,15 @@ function onKeyDown(key) {
     keysPressed[key] = true
     
     if key == "W" then
-        character.moveForward(ploid.WalkSpeed)
+        character.moveForward(ploidConfig.WalkSpeed)
     elseif key == "S" then
-        character.moveBackward(ploid.WalkSpeed)
+        character.moveBackward(ploidConfig.WalkSpeed)
     elseif key == "A" then
-        character.moveLeft(ploid.WalkSpeed)
+        character.moveLeft(ploidConfig.WalkSpeed)
     elseif key == "D" then
-        character.moveRight(ploid.WalkSpeed)
+        character.moveRight(ploidConfig.WalkSpeed)
     elseif key == "Space" then
-        character.jump(ploid.JumpPower)
+        character.jump(ploidConfig.JumpPower)
     end
 end
 
@@ -375,7 +423,7 @@ mouse.onMove(onMouseMove)`;
 
 inst player = game.Players.LocalPlayer
 inst character = player.Character
-inst ploid = character.Ploid
+inst ploidConfig = character.Ploid.Config
 
 inst velocity = { x: 0, y: 0, z: 0 }
 inst isGrounded = true
@@ -409,23 +457,23 @@ function checkGroundCollision() {
     end
 end
 
-function moveForward(speed) {
+function moveForward(speed)
     velocity.z = velocity.z - speed * 0.1
 end
 
-function moveBackward(speed) {
+function moveBackward(speed)
     velocity.z = velocity.z + speed * 0.1
 end
 
-function moveLeft(speed) {
+function moveLeft(speed)
     velocity.x = velocity.x - speed * 0.1
 end
 
-function moveRight(speed) {
+function moveRight(speed)
     velocity.x = velocity.x + speed * 0.1
 end
 
-function jump(power) {
+function jump(power)
     if isGrounded then
         velocity.y = power
         isGrounded = false
@@ -441,7 +489,47 @@ character.jump = jump
 
 game.onHeartbeat(updateMovement)`;
       case 'database':
-        return `-- Player Database Schema
+        if (projectType === 'webapp') {
+          return `-- Application Database Schema
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS app_data (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    data_key TEXT NOT NULL,
+    data_value TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    session_token TEXT UNIQUE NOT NULL,
+    expires_at TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+function createUser(userId, username, email) {
+    INSERT INTO users (id, username, email) VALUES (userId, username, email);
+}
+
+function getUserData(userId, key) {
+    SELECT data_value FROM app_data WHERE user_id = userId AND data_key = key;
+}
+
+function setUserData(userId, key, value) {
+    INSERT OR REPLACE INTO app_data (user_id, data_key, data_value) 
+    VALUES (userId, key, value);
+}`;
+        } else {
+          return `-- Player Database Schema
 CREATE TABLE IF NOT EXISTS players (
     id INTEGER PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
@@ -493,6 +581,7 @@ function addExperience(playerId, exp) {
     inst newLevel = math.floor(currentExp / 100) + 1;
     UPDATE players SET level = newLevel WHERE id = playerId;
 }`;
+        }
       default:
         return '// Template script';
     }
@@ -639,9 +728,21 @@ function addExperience(playerId, exp) {
                       <li>• Advanced syntax highlighter</li>
                     </>
                   )}
-                  <li>• Complete service hierarchy</li>
-                  <li>• Database schema</li>
-                  <li>• UI templates</li>
+                  {projectType === 'blank' && (
+                    <>
+                      <li>• Empty service hierarchy</li>
+                      <li>• No pre-built templates</li>
+                      <li>• Complete creative freedom</li>
+                      <li>• Build from scratch</li>
+                    </>
+                  )}
+                  {projectType !== 'blank' && (
+                    <>
+                      <li>• Complete service hierarchy</li>
+                      <li>• Database schema</li>
+                      <li>• UI templates</li>
+                    </>
+                  )}
                 </ul>
               </div>
 

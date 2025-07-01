@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, Folder, FileText, Database, Volume2, Image, Box, Monitor, Plus, MoreHorizontal, AlertTriangle } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FileText, Database, Volume2, Image, Box, Monitor, Plus, MoreHorizontal, AlertTriangle, Settings } from 'lucide-react';
 
 interface FileExplorerProps {
   onFileSelect: (file: any) => void;
@@ -20,13 +20,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         case 'vscript': return 'bg-green-500';
         case 'vlscript': return 'bg-red-500';
         case 'vdata': return 'bg-yellow-500';
+        case 'config': return 'bg-blue-500';
         default: return 'bg-gray-500';
       }
     };
 
     return (
       <div className="relative">
-        <FileText className="w-4 h-4 text-gray-300" />
+        {type === 'config' ? <Settings className="w-4 h-4 text-gray-300" /> : <FileText className="w-4 h-4 text-gray-300" />}
         <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 ${getColor()} rounded-sm`}></div>
       </div>
     );
@@ -38,25 +39,18 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         id: 'workspace',
         name: 'Workspace',
         icon: <Box className="w-4 h-4 text-indigo-400" />,
-        children: [
-          ...(project.type === 'game3d' || project.type === 'game2d' ? [{
-            id: 'workspace-view',
-            name: 'Workspace',
-            type: project.type === 'game3d' ? 'workspace3d' : 'workspace2d',
-            icon: <Box className="w-4 h-4 text-indigo-400" />
-          }] : []),
-          ...project.services.workspace.objects.map((obj: any) => ({
-            ...obj,
-            icon: <Box className="w-4 h-4 text-indigo-400" />
-          }))
-        ]
+        type: project.type === 'game3d' ? 'workspace3d' : project.type === 'game2d' ? 'workspace2d' : 'workspace',
+        children: project.services.workspace.objects.map((obj: any) => ({
+          ...obj,
+          icon: <Box className="w-4 h-4 text-indigo-400" />
+        }))
       },
       {
         id: 'replicatedStorage',
         name: 'ReplicatedStorage',
         icon: <Folder className="w-4 h-4 text-blue-400" />,
         children: [
-          {
+          ...(project.services.replicatedStorage.images.length > 0 ? [{
             id: 'rs-images',
             name: 'Images',
             icon: <Image className="w-4 h-4 text-purple-400" />,
@@ -64,8 +58,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
               ...img,
               icon: <Image className="w-4 h-4 text-purple-400" />
             }))
-          },
-          {
+          }] : []),
+          ...(project.services.replicatedStorage.sounds.length > 0 ? [{
             id: 'rs-sounds',
             name: 'Sounds',
             icon: <Volume2 className="w-4 h-4 text-yellow-400" />,
@@ -73,8 +67,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
               ...sound,
               icon: <Volume2 className="w-4 h-4 text-yellow-400" />
             }))
-          },
-          {
+          }] : []),
+          ...(project.services.replicatedStorage.scripts.length > 0 ? [{
             id: 'rs-scripts',
             name: 'Scripts',
             icon: <Folder className="w-4 h-4 text-green-400" />,
@@ -82,8 +76,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
               ...script,
               icon: <ScriptIcon type={script.type} />
             }))
-          }
-        ]
+          }] : [])
+        ].filter(Boolean)
       },
       {
         id: 'serverStorage',
@@ -102,12 +96,17 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
               icon: child.type === 'ploid' ? <Box className="w-4 h-4 text-green-400" /> : 
                     child.type === '3dobject' ? <Box className="w-4 h-4 text-indigo-400" /> :
                     child.type === 'vlscript' ? <ScriptIcon type={child.type} /> :
-                    <Image className="w-4 h-4 text-purple-400" />
+                    child.type === 'config' ? <ScriptIcon type={child.type} /> :
+                    <Image className="w-4 h-4 text-purple-400" />,
+              children: child.children?.map((grandchild: any) => ({
+                ...grandchild,
+                icon: <ScriptIcon type={grandchild.type} />
+              }))
             }))
           })) || []
         ]
       },
-      {
+      ...(project.services.replicatedFirst.databases.length > 0 ? [{
         id: 'replicatedFirst',
         name: 'ReplicatedFirst',
         icon: <Database className="w-4 h-4 text-cyan-400" />,
@@ -115,7 +114,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
           ...db,
           icon: <ScriptIcon type={db.type} />
         }))
-      },
+      }] : []),
       {
         id: 'soundService',
         name: 'SoundService',
@@ -128,7 +127,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         icon: <Image className="w-4 h-4 text-purple-400" />,
         children: []
       },
-      {
+      ...(project.services.uiService.screens.length > 0 ? [{
         id: 'uiService',
         name: 'UIService',
         icon: <Monitor className="w-4 h-4 text-pink-400" />,
@@ -136,8 +135,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
           ...screen,
           icon: <Monitor className="w-4 h-4 text-pink-400" />
         }))
-      }
-    ];
+      }] : [])
+    ].filter(Boolean);
 
     // Add THREEDStorage if plugin is installed
     if (hasThreeDStorage) {
@@ -253,6 +252,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
           <div>• <span className="text-red-300">.vlscript</span> - Client scripts</div>
           <div>• <span className="text-green-300">.vscript</span> - Server scripts</div>
           <div>• <span className="text-yellow-300">.vdata</span> - Database scripts</div>
+          <div>• <span className="text-blue-300">Config</span> - Configuration object</div>
           <div>• <span className="text-blue-300">Ploid</span> - Character controller</div>
         </div>
       </div>
@@ -277,6 +277,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
               <button
                 onClick={() => {
                   const item = services
+                    .flatMap(s => [s, ...(s.children || [])])
                     .flatMap(s => [s, ...(s.children || [])])
                     .flatMap(s => [s, ...(s.children || [])])
                     .find(i => i.id === showWarning);

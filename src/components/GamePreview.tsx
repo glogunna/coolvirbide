@@ -1141,7 +1141,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             <span>Scripts: {loadedScripts.length}</span>
             <span>Memory: {gameStats.memory}</span>
             {project.type === 'game3d' && (
-              <span className={`${isMouseLocked ? 'text-green-400' : 'text-yellow-400'}`}>
+              <span className={\`${isMouseLocked ? 'text-green-400' : 'text-yellow-400'}`}>
                 Mouse: {isMouseLocked ? 'Locked' : 'Free'}
               </span>
             )}
@@ -1167,11 +1167,11 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       </div>
 
       {/* Game Canvas */}
-      <div className={`flex-1 flex items-center justify-center p-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-black' : ''}`}>
+      <div className={\`flex-1 flex items-center justify-center p-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-black' : ''}`}>
         <div className="relative">
           <div
             ref={mountRef}
-            className={`border border-gray-600 rounded-lg shadow-lg ${isFullscreen ? 'w-full h-full' : ''}`}
+            className={\`border border-gray-600 rounded-lg shadow-lg ${isFullscreen ? 'w-full h-full' : ''}`}
             style={{ 
               width: isFullscreen ? '100vw' : '800px',
               height: isFullscreen ? '100vh' : '600px'

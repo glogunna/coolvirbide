@@ -68,9 +68,10 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
             children: [
               { 
                 id: 'playerModel', 
-                name: type === 'game3d' ? 'PlayerModel.obj' : 'PlayerSprite.png', 
-                type: type === 'game3d' ? '3dobject' : 'image', 
-                url: type === 'game3d' ? '/models/character.obj' : 'https://images.pexels.com/photos/2387793/pexels-photo-2387793.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1' 
+                name: 'PlayerModel.obj', 
+                type: '3dobject', 
+                url: '/models/character.obj',
+                description: 'Red cube character model'
               },
               {
                 id: 'ploid',
@@ -742,7 +743,7 @@ function addExperience(playerId, exp) {
                   {projectType === 'game3d' && (
                     <>
                       <li>• 3D workspace with baseplate</li>
-                      <li>• Starter character model with Ploid</li>
+                      <li>• <span className="text-red-400">Red cube character model</span> with Ploid</li>
                       <li>• Physics system</li>
                       <li>• Camera controls (Third/First person)</li>
                       <li>• Input handling scripts</li>

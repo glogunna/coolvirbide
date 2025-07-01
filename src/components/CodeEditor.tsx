@@ -10,6 +10,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ currentFile }) => {
   const [fontSize, setFontSize] = useState(14);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     if (currentFile) {
@@ -19,6 +20,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ currentFile }) => {
         const sampleCode = getSampleCode(currentFile.type);
         setCode(sampleCode);
       }
+      setHasUnsavedChanges(false);
     }
   }, [currentFile]);
 
@@ -56,15 +58,15 @@ inst camera = Workspace.Camera
 inst ui = UIService.MainMenu
 
 function handleKeyPress(key) {
-    if (key == "W") {
+    if key == "W" then
         player.moveForward()
-    } else if (key == "S") {
+    elseif key == "S" then
         player.moveBackward()
-    } else if (key == "A") {
+    elseif key == "A" then
         player.moveLeft()
-    } else if (key == "D") {
+    elseif key == "D" then
         player.moveRight()
-    }
+    end
 }
 
 function updateUI() {
@@ -154,8 +156,18 @@ print("Configuration loaded successfully")`;
     }
   };
 
+  const handleCodeChange = (newCode: string) => {
+    setCode(newCode);
+    setHasUnsavedChanges(true);
+  };
+
   const handleSave = () => {
     console.log('Saving file:', currentFile?.name);
+    // Update the file content
+    if (currentFile) {
+      currentFile.content = code;
+      setHasUnsavedChanges(false);
+    }
   };
 
   const highlightSyntax = (text: string) => {
@@ -279,6 +291,7 @@ print("Configuration loaded successfully")`;
           <div className="flex items-center gap-2">
             {currentFile.icon}
             <span className="font-medium">{currentFile.name}</span>
+            {hasUnsavedChanges && <span className="text-yellow-400">●</span>}
             <span className={`px-2 py-1 rounded text-xs font-semibold ${
               currentFile.type === 'vscript' ? 'bg-green-600 text-white' :
               currentFile.type === 'vlscript' ? 'bg-red-600 text-white' :
@@ -315,7 +328,11 @@ print("Configuration loaded successfully")`;
           </button>
           <button
             onClick={handleSave}
-            className="flex items-center gap-2 px-3 py-1 bg-green-600 hover:bg-green-700 rounded transition-colors"
+            className={`flex items-center gap-2 px-3 py-1 rounded transition-colors ${
+              hasUnsavedChanges 
+                ? 'bg-green-600 hover:bg-green-700 text-white' 
+                : 'bg-gray-600 text-gray-400'
+            }`}
           >
             <Save className="w-4 h-4" />
             Save
@@ -352,7 +369,7 @@ print("Configuration loaded successfully")`;
           <div className="flex-1 relative">
             <textarea
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => handleCodeChange(e.target.value)}
               className="w-full h-full bg-transparent text-white font-mono resize-none focus:outline-none leading-6 p-4 absolute inset-0 z-10"
               style={{ fontSize: `${fontSize}px` }}
               spellCheck={false}

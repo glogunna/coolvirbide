@@ -40,10 +40,19 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         name: 'Workspace',
         icon: <Box className="w-4 h-4 text-indigo-400" />,
         type: project.type === 'game3d' ? 'workspace3d' : project.type === 'game2d' ? 'workspace2d' : 'workspace',
-        children: project.services.workspace.objects.map((obj: any) => ({
-          ...obj,
-          icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : <Box className="w-4 h-4 text-indigo-400" />
-        }))
+        children: [
+          // Add workspace object back for easy access
+          {
+            id: 'workspace-view',
+            name: 'Workspace',
+            type: project.type === 'game3d' ? 'workspace3d' : project.type === 'game2d' ? 'workspace2d' : 'workspace',
+            icon: <Box className="w-4 h-4 text-indigo-400" />
+          },
+          ...project.services.workspace.objects.map((obj: any) => ({
+            ...obj,
+            icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : <Box className="w-4 h-4 text-indigo-400" />
+          }))
+        ]
       },
       {
         id: 'replicatedStorage',

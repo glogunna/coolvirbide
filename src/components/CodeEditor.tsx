@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Save, Copy, Search, ZoomIn, ZoomOut, Settings, Play, Volume2, Image as ImageIcon } from 'lucide-react';
 
 interface CodeEditorProps {
@@ -12,6 +12,23 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ currentFile }) => {
   const [showSearch, setShowSearch] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  // Auto-save function
+  const autoSave = useCallback(() => {
+    if (currentFile && hasUnsavedChanges) {
+      currentFile.content = code;
+      setHasUnsavedChanges(false);
+      console.log('Auto-saved:', currentFile.name);
+    }
+  }, [currentFile, code, hasUnsavedChanges]);
+
+  // Auto-save every 2 seconds when there are changes
+  useEffect(() => {
+    if (hasUnsavedChanges) {
+      const timer = setTimeout(autoSave, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [hasUnsavedChanges, autoSave]);
+
   useEffect(() => {
     if (currentFile) {
       if (currentFile.content) {
@@ -19,6 +36,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ currentFile }) => {
       } else {
         const sampleCode = getSampleCode(currentFile.type);
         setCode(sampleCode);
+        // Set initial content
+        currentFile.content = sampleCode;
       }
       setHasUnsavedChanges(false);
     }
@@ -162,12 +181,7 @@ print("Configuration loaded successfully")`;
   };
 
   const handleSave = () => {
-    console.log('Saving file:', currentFile?.name);
-    // Update the file content
-    if (currentFile) {
-      currentFile.content = code;
-      setHasUnsavedChanges(false);
-    }
+    autoSave();
   };
 
   const highlightSyntax = (text: string) => {
@@ -291,7 +305,7 @@ print("Configuration loaded successfully")`;
           <div className="flex items-center gap-2">
             {currentFile.icon}
             <span className="font-medium">{currentFile.name}</span>
-            {hasUnsavedChanges && <span className="text-yellow-400">●</span>}
+            {hasUnsavedChanges && <span className="text-yellow-400" title="Auto-saving...">●</span>}
             <span className={`px-2 py-1 rounded text-xs font-semibold ${
               currentFile.type === 'vscript' ? 'bg-green-600 text-white' :
               currentFile.type === 'vlscript' ? 'bg-red-600 text-white' :
@@ -328,14 +342,11 @@ print("Configuration loaded successfully")`;
           </button>
           <button
             onClick={handleSave}
-            className={`flex items-center gap-2 px-3 py-1 rounded transition-colors ${
-              hasUnsavedChanges 
-                ? 'bg-green-600 hover:bg-green-700 text-white' 
-                : 'bg-gray-600 text-gray-400'
-            }`}
+            className="flex items-center gap-2 px-3 py-1 bg-gray-600 text-gray-400 rounded transition-colors"
+            title="Auto-save enabled"
           >
             <Save className="w-4 h-4" />
-            Save
+            Auto-save
           </button>
         </div>
       </div>

@@ -54,12 +54,57 @@ function App() {
     return <LoadingScreen />;
   }
 
+  const getWorkspaceDisplayMode = () => {
+    if (!project) return 'OFF';
+    
+    // Find workspace config
+    const workspaceConfig = project.services.workspace.objects.find((obj: any) => obj.type === 'config');
+    if (workspaceConfig && workspaceConfig.content) {
+      const match = workspaceConfig.content.match(/workspace\.DisplayMode\s*=\s*"([^"]+)"/);
+      if (match) {
+        return match[1];
+      }
+    }
+    
+    // Default based on project type
+    if (project.type === 'game3d') return 'THREED';
+    if (project.type === 'game2d') return 'TWOD';
+    return 'OFF';
+  };
+
   const handleFileSelect = (file: any) => {
     const existingTab = openTabs.find(tab => tab.file.id === file.id);
     
     if (existingTab) {
       setActiveTabId(existingTab.id);
     } else {
+      // Check if this is a workspace folder or workspace object
+      if (file.id === 'workspace' || file.id === 'workspace-view' || file.type === 'workspace3d' || file.type === 'workspace2d') {
+        const displayMode = getWorkspaceDisplayMode();
+        
+        let workspaceType = 'workspace';
+        if (displayMode === 'THREED') {
+          workspaceType = 'workspace3d';
+        } else if (displayMode === 'TWOD') {
+          workspaceType = 'workspace2d';
+        }
+        
+        if (displayMode !== 'OFF') {
+          const workspaceTab: OpenTab = {
+            id: 'workspace-tab',
+            name: 'Workspace',
+            type: workspaceType,
+            file: { id: 'workspace', name: 'Workspace', type: workspaceType }
+          };
+          
+          // Remove existing workspace tab if any
+          const filteredTabs = openTabs.filter(tab => tab.id !== 'workspace-tab');
+          setOpenTabs([...filteredTabs, workspaceTab]);
+          setActiveTabId('workspace-tab');
+        }
+        return;
+      }
+      
       const newTab: OpenTab = {
         id: `tab-${Date.now()}`,
         name: file.name,

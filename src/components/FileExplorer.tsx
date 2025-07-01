@@ -280,6 +280,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
                     .flatMap(s => [s, ...(s.children || [])])
                     .flatMap(s => [s, ...(s.children || [])])
                     .flatMap(s => [s, ...(s.children || [])])
+                    .flatMap(s => [s, ...(s.children || [])])
                     .find(i => i.id === showWarning);
                   if (item) confirmEditWarningScript(item);
                 }}

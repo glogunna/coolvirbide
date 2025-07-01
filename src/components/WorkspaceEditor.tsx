@@ -17,13 +17,14 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
   const [tool, setTool] = useState('move');
   const [objects, setObjects] = useState<any[]>([]);
   const [keys, setKeys] = useState<Set<string>>(new Set());
+  const [transformControls, setTransformControls] = useState<any>(null);
 
   useEffect(() => {
     if (!mountRef.current) return;
 
     // Scene setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // Sky blue
+    scene.background = new THREE.Color(0x87CEEB);
     sceneRef.current = scene;
 
     // Camera setup
@@ -65,12 +66,12 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     baseplate.position.y = -0.5;
     baseplate.receiveShadow = true;
     baseplate.name = 'Baseplate';
-    baseplate.userData = { id: 'baseplate', name: 'Baseplate', type: '3dobject' };
+    baseplate.userData = { id: 'baseplate', name: 'Baseplate', type: '3dobject', selectable: false };
     scene.add(baseplate);
 
     // Initialize objects array
     const initialObjects = [
-      { id: 'baseplate', name: 'Baseplate', type: '3dobject', mesh: baseplate, visible: true }
+      { id: 'baseplate', name: 'Baseplate', type: '3dobject', mesh: baseplate, visible: true, selectable: false }
     ];
 
     // Add some example objects if it's a game project
@@ -82,7 +83,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       cube.position.set(0, 1, 0);
       cube.castShadow = true;
       cube.name = 'Part';
-      cube.userData = { id: 'part1', name: 'Part', type: '3dobject' };
+      cube.userData = { id: 'part1', name: 'Part', type: '3dobject', selectable: true };
       scene.add(cube);
 
       // Add a sphere
@@ -92,12 +93,12 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       sphere.position.set(5, 1, 0);
       sphere.castShadow = true;
       sphere.name = 'Ball';
-      sphere.userData = { id: 'ball1', name: 'Ball', type: '3dobject' };
+      sphere.userData = { id: 'ball1', name: 'Ball', type: '3dobject', selectable: true };
       scene.add(sphere);
 
       initialObjects.push(
-        { id: 'part1', name: 'Part', type: '3dobject', mesh: cube, visible: true },
-        { id: 'ball1', name: 'Ball', type: '3dobject', mesh: sphere, visible: true }
+        { id: 'part1', name: 'Part', type: '3dobject', mesh: cube, visible: true, selectable: true },
+        { id: 'ball1', name: 'Ball', type: '3dobject', mesh: sphere, visible: true, selectable: true }
       );
     }
 
@@ -118,17 +119,157 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(scene.children.filter(obj => obj.userData.id));
+      const selectableObjects = scene.children.filter(obj => obj.userData.selectable);
+      const intersects = raycaster.intersectObjects(selectableObjects);
 
       if (intersects.length > 0) {
         const clickedObject = intersects[0].object;
         const objectData = initialObjects.find(obj => obj.id === clickedObject.userData.id);
         setSelectedObject(objectData);
+        
+        // Highlight selected object
+        highlightObject(clickedObject);
       } else {
         setSelectedObject(null);
+        clearHighlights();
         isDragging = true;
         previousMousePosition = { x: event.clientX, y: event.clientY };
       }
+    };
+
+    const highlightObject = (object: THREE.Object3D) => {
+      clearHighlights();
+      
+      // Create outline effect
+      const outlineGeometry = object.geometry.clone();
+      const outlineMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x10B981, 
+        side: THREE.BackSide,
+        transparent: true,
+        opacity: 0.3
+      });
+      const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
+      outline.position.copy(object.position);
+      outline.rotation.copy(object.rotation);
+      outline.scale.copy(object.scale).multiplyScalar(1.05);
+      outline.name = 'outline';
+      scene.add(outline);
+
+      // Add transform gizmos based on current tool
+      addTransformGizmos(object);
+    };
+
+    const clearHighlights = () => {
+      const outlines = scene.children.filter(obj => obj.name === 'outline');
+      outlines.forEach(outline => scene.remove(outline));
+      
+      const gizmos = scene.children.filter(obj => obj.name.includes('gizmo'));
+      gizmos.forEach(gizmo => scene.remove(gizmo));
+    };
+
+    const addTransformGizmos = (object: THREE.Object3D) => {
+      if (tool === 'move') {
+        addMoveGizmos(object);
+      } else if (tool === 'rotate') {
+        addRotateGizmos(object);
+      } else if (tool === 'scale') {
+        addScaleGizmos(object);
+      }
+    };
+
+    const addMoveGizmos = (object: THREE.Object3D) => {
+      const arrowLength = 2;
+      const arrowRadius = 0.1;
+      
+      // X axis (red)
+      const xArrowGeometry = new THREE.ConeGeometry(arrowRadius * 2, arrowLength * 0.3, 8);
+      const xArrowMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const xArrow = new THREE.Mesh(xArrowGeometry, xArrowMaterial);
+      xArrow.position.copy(object.position);
+      xArrow.position.x += arrowLength;
+      xArrow.rotation.z = -Math.PI / 2;
+      xArrow.name = 'move-gizmo-x';
+      scene.add(xArrow);
+
+      // Y axis (green)
+      const yArrowGeometry = new THREE.ConeGeometry(arrowRadius * 2, arrowLength * 0.3, 8);
+      const yArrowMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      const yArrow = new THREE.Mesh(yArrowGeometry, yArrowMaterial);
+      yArrow.position.copy(object.position);
+      yArrow.position.y += arrowLength;
+      yArrow.name = 'move-gizmo-y';
+      scene.add(yArrow);
+
+      // Z axis (blue)
+      const zArrowGeometry = new THREE.ConeGeometry(arrowRadius * 2, arrowLength * 0.3, 8);
+      const zArrowMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+      const zArrow = new THREE.Mesh(zArrowGeometry, zArrowMaterial);
+      zArrow.position.copy(object.position);
+      zArrow.position.z += arrowLength;
+      zArrow.rotation.x = Math.PI / 2;
+      zArrow.name = 'move-gizmo-z';
+      scene.add(zArrow);
+    };
+
+    const addRotateGizmos = (object: THREE.Object3D) => {
+      const radius = 2;
+      
+      // X axis rotation ring (red)
+      const xRingGeometry = new THREE.TorusGeometry(radius, 0.05, 8, 32);
+      const xRingMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const xRing = new THREE.Mesh(xRingGeometry, xRingMaterial);
+      xRing.position.copy(object.position);
+      xRing.rotation.y = Math.PI / 2;
+      xRing.name = 'rotate-gizmo-x';
+      scene.add(xRing);
+
+      // Y axis rotation ring (green)
+      const yRingGeometry = new THREE.TorusGeometry(radius, 0.05, 8, 32);
+      const yRingMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      const yRing = new THREE.Mesh(yRingGeometry, yRingMaterial);
+      yRing.position.copy(object.position);
+      yRing.rotation.x = Math.PI / 2;
+      yRing.name = 'rotate-gizmo-y';
+      scene.add(yRing);
+
+      // Z axis rotation ring (blue)
+      const zRingGeometry = new THREE.TorusGeometry(radius, 0.05, 8, 32);
+      const zRingMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+      const zRing = new THREE.Mesh(zRingGeometry, zRingMaterial);
+      zRing.position.copy(object.position);
+      zRing.name = 'rotate-gizmo-z';
+      scene.add(zRing);
+    };
+
+    const addScaleGizmos = (object: THREE.Object3D) => {
+      const cubeSize = 0.2;
+      
+      // X axis (red)
+      const xCubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+      const xCubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const xCube = new THREE.Mesh(xCubeGeometry, xCubeMaterial);
+      xCube.position.copy(object.position);
+      xCube.position.x += 2;
+      xCube.name = 'scale-gizmo-x';
+      scene.add(xCube);
+
+      // Y axis (green)
+      const yCubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+      const yCubeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      const yCube = new THREE.Mesh(yCubeGeometry, yCubeMaterial);
+      yCube.position.copy(object.position);
+      yCube.position.y += 2;
+      yCube.name = 'scale-gizmo-y';
+      scene.add(yCube);
+
+      // Z axis (blue)
+      const zCubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+      const zCubeMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+      const zCube = new THREE.Mesh(zCubeGeometry, zCubeMaterial);
+      zCube.position.copy(object.position);
+      zCube.position.z += 2;
+      zCube.name = 'scale-gizmo-z';
+      scene.add(zCube);
     };
 
     const onMouseMove = (event: MouseEvent) => {
@@ -139,11 +280,11 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         y: event.clientY - previousMousePosition.y
       };
 
-      // Rotate camera around the scene (fixed inversion)
+      // Rotate camera around the scene
       const spherical = new THREE.Spherical();
       spherical.setFromVector3(camera.position);
-      spherical.theta += deltaMove.x * 0.01; // Fixed: removed negative sign
-      spherical.phi -= deltaMove.y * 0.01; // Fixed: changed to minus
+      spherical.theta += deltaMove.x * 0.01;
+      spherical.phi -= deltaMove.y * 0.01;
       spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
 
       camera.position.setFromSpherical(spherical);
@@ -226,6 +367,131 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     };
   }, [project, keys]);
 
+  // Update gizmos when tool changes
+  useEffect(() => {
+    if (selectedObject && selectedObject.mesh) {
+      const scene = sceneRef.current;
+      if (scene) {
+        // Clear existing gizmos
+        const gizmos = scene.children.filter(obj => obj.name.includes('gizmo'));
+        gizmos.forEach(gizmo => scene.remove(gizmo));
+        
+        // Add new gizmos based on current tool
+        if (tool === 'move') {
+          addMoveGizmos(selectedObject.mesh);
+        } else if (tool === 'rotate') {
+          addRotateGizmos(selectedObject.mesh);
+        } else if (tool === 'scale') {
+          addScaleGizmos(selectedObject.mesh);
+        }
+      }
+    }
+  }, [tool, selectedObject]);
+
+  const addMoveGizmos = (object: THREE.Object3D) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    const arrowLength = 2;
+    const arrowRadius = 0.1;
+    
+    // X axis (red)
+    const xArrowGeometry = new THREE.ConeGeometry(arrowRadius * 2, arrowLength * 0.3, 8);
+    const xArrowMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const xArrow = new THREE.Mesh(xArrowGeometry, xArrowMaterial);
+    xArrow.position.copy(object.position);
+    xArrow.position.x += arrowLength;
+    xArrow.rotation.z = -Math.PI / 2;
+    xArrow.name = 'move-gizmo-x';
+    scene.add(xArrow);
+
+    // Y axis (green)
+    const yArrowGeometry = new THREE.ConeGeometry(arrowRadius * 2, arrowLength * 0.3, 8);
+    const yArrowMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const yArrow = new THREE.Mesh(yArrowGeometry, yArrowMaterial);
+    yArrow.position.copy(object.position);
+    yArrow.position.y += arrowLength;
+    yArrow.name = 'move-gizmo-y';
+    scene.add(yArrow);
+
+    // Z axis (blue)
+    const zArrowGeometry = new THREE.ConeGeometry(arrowRadius * 2, arrowLength * 0.3, 8);
+    const zArrowMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    const zArrow = new THREE.Mesh(zArrowGeometry, zArrowMaterial);
+    zArrow.position.copy(object.position);
+    zArrow.position.z += arrowLength;
+    zArrow.rotation.x = Math.PI / 2;
+    zArrow.name = 'move-gizmo-z';
+    scene.add(zArrow);
+  };
+
+  const addRotateGizmos = (object: THREE.Object3D) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    const radius = 2;
+    
+    // X axis rotation ring (red)
+    const xRingGeometry = new THREE.TorusGeometry(radius, 0.05, 8, 32);
+    const xRingMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const xRing = new THREE.Mesh(xRingGeometry, xRingMaterial);
+    xRing.position.copy(object.position);
+    xRing.rotation.y = Math.PI / 2;
+    xRing.name = 'rotate-gizmo-x';
+    scene.add(xRing);
+
+    // Y axis rotation ring (green)
+    const yRingGeometry = new THREE.TorusGeometry(radius, 0.05, 8, 32);
+    const yRingMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const yRing = new THREE.Mesh(yRingGeometry, yRingMaterial);
+    yRing.position.copy(object.position);
+    yRing.rotation.x = Math.PI / 2;
+    yRing.name = 'rotate-gizmo-y';
+    scene.add(yRing);
+
+    // Z axis rotation ring (blue)
+    const zRingGeometry = new THREE.TorusGeometry(radius, 0.05, 8, 32);
+    const zRingMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    const zRing = new THREE.Mesh(zRingGeometry, zRingMaterial);
+    zRing.position.copy(object.position);
+    zRing.name = 'rotate-gizmo-z';
+    scene.add(zRing);
+  };
+
+  const addScaleGizmos = (object: THREE.Object3D) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    const cubeSize = 0.2;
+    
+    // X axis (red)
+    const xCubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+    const xCubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const xCube = new THREE.Mesh(xCubeGeometry, xCubeMaterial);
+    xCube.position.copy(object.position);
+    xCube.position.x += 2;
+    xCube.name = 'scale-gizmo-x';
+    scene.add(xCube);
+
+    // Y axis (green)
+    const yCubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+    const yCubeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const yCube = new THREE.Mesh(yCubeGeometry, yCubeMaterial);
+    yCube.position.copy(object.position);
+    yCube.position.y += 2;
+    yCube.name = 'scale-gizmo-y';
+    scene.add(yCube);
+
+    // Z axis (blue)
+    const zCubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+    const zCubeMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    const zCube = new THREE.Mesh(zCubeGeometry, zCubeMaterial);
+    zCube.position.copy(object.position);
+    zCube.position.z += 2;
+    zCube.name = 'scale-gizmo-z';
+    scene.add(zCube);
+  };
+
   const addObject = (type: string) => {
     if (!sceneRef.current) return;
 
@@ -262,15 +528,15 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     );
     mesh.castShadow = true;
     mesh.name = name;
-    mesh.userData = { id, name, type: '3dobject' };
+    mesh.userData = { id, name, type: '3dobject', selectable: true };
     sceneRef.current.add(mesh);
 
-    const newObject = { id, name, type: '3dobject', mesh, visible: true };
+    const newObject = { id, name, type: '3dobject', mesh, visible: true, selectable: true };
     setObjects(prev => [...prev, newObject]);
   };
 
   const deleteObject = (id: string) => {
-    if (id === 'baseplate') return; // Don't allow deleting baseplate
+    if (id === 'baseplate') return;
     
     const objectToDelete = objects.find(obj => obj.id === id);
     if (objectToDelete && sceneRef.current) {
@@ -278,6 +544,12 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       setObjects(prev => prev.filter(obj => obj.id !== id));
       if (selectedObject?.id === id) {
         setSelectedObject(null);
+        // Clear highlights when deleting selected object
+        const scene = sceneRef.current;
+        const outlines = scene.children.filter(obj => obj.name === 'outline');
+        outlines.forEach(outline => scene.remove(outline));
+        const gizmos = scene.children.filter(obj => obj.name.includes('gizmo'));
+        gizmos.forEach(gizmo => scene.remove(gizmo));
       }
     }
   };
@@ -307,6 +579,21 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       } else if (property.startsWith('position.')) {
         const axis = property.split('.')[1];
         obj.mesh.position[axis as 'x' | 'y' | 'z'] = value;
+        
+        // Update gizmos position if this object is selected
+        if (selectedObject?.id === id && sceneRef.current) {
+          const gizmos = sceneRef.current.children.filter(child => child.name.includes('gizmo'));
+          gizmos.forEach(gizmo => {
+            gizmo.position.copy(obj.mesh.position);
+            if (gizmo.name.includes('x')) gizmo.position.x += 2;
+            if (gizmo.name.includes('y')) gizmo.position.y += 2;
+            if (gizmo.name.includes('z')) gizmo.position.z += 2;
+          });
+          
+          // Update outline position
+          const outlines = sceneRef.current.children.filter(child => child.name === 'outline');
+          outlines.forEach(outline => outline.position.copy(obj.mesh.position));
+        }
       }
       setObjects([...objects]);
       if (selectedObject?.id === id) {
@@ -386,6 +673,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
             <div>WASD: Move camera</div>
             <div>Scroll: Zoom in/out</div>
             <div>Click objects to select</div>
+            <div className="text-green-400">Tool: {tool.charAt(0).toUpperCase() + tool.slice(1)}</div>
           </div>
         </div>
       </div>

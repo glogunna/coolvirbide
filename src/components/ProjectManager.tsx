@@ -42,29 +42,6 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
   ];
 
   const getProjectTemplate = (type: string) => {
-    if (type === 'blank') {
-      return {
-        replicatedStorage: {
-          images: [],
-          sounds: [],
-          scripts: []
-        },
-        serverStorage: {
-          scripts: [],
-          character: []
-        },
-        replicatedFirst: {
-          databases: []
-        },
-        workspace: {
-          objects: []
-        },
-        uiService: {
-          screens: []
-        }
-      };
-    }
-
     const baseServices = {
       replicatedStorage: {
         images: type === 'game2d' ? [
@@ -75,14 +52,14 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
         sounds: type.includes('game') ? [
           { id: 'bgm1', name: 'BackgroundMusic.mp3', type: 'sound', duration: '3:24' }
         ] : [],
-        scripts: [
+        scripts: type !== 'blank' ? [
           { id: 'gameManager', name: type === 'webapp' ? 'AppManager.vscript' : 'GameManager.vscript', type: 'vscript', content: getTemplateScript(type, 'gameManager') }
-        ]
+        ] : []
       },
       serverStorage: {
-        scripts: [
+        scripts: type !== 'blank' ? [
           { id: 'serverInit', name: 'ServerInit.vscript', type: 'vscript', content: getTemplateScript(type, 'serverInit') }
-        ],
+        ] : [],
         character: type.includes('game') ? [
           { 
             id: 'character1', 
@@ -142,10 +119,36 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
       },
       workspace: {
         objects: type === 'game3d' ? [
-          { id: 'baseplate', name: 'Baseplate', type: '3dobject', url: '/models/baseplate.obj' }
+          { id: 'baseplate', name: 'Baseplate', type: '3dobject', url: '/models/baseplate.obj' },
+          {
+            id: 'workspaceConfig',
+            name: 'Config',
+            type: 'config',
+            content: getWorkspaceConfig('THREED')
+          }
         ] : type === 'game2d' ? [
-          { id: 'ground', name: 'Ground', type: 'sprite', url: '/sprites/ground.png' }
-        ] : []
+          { id: 'ground', name: 'Ground', type: 'sprite', url: '/sprites/ground.png' },
+          {
+            id: 'workspaceConfig',
+            name: 'Config',
+            type: 'config',
+            content: getWorkspaceConfig('TWOD')
+          }
+        ] : type === 'webapp' ? [
+          {
+            id: 'workspaceConfig',
+            name: 'Config',
+            type: 'config',
+            content: getWorkspaceConfig('OFF')
+          }
+        ] : [
+          {
+            id: 'workspaceConfig',
+            name: 'Config',
+            type: 'config',
+            content: getWorkspaceConfig('OFF')
+          }
+        ]
       },
       uiService: {
         screens: type === 'webapp' ? [
@@ -157,6 +160,43 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
     };
 
     return baseServices;
+  };
+
+  const getWorkspaceConfig = (mode: string) => {
+    return `-- Workspace Configuration
+-- This script configures the workspace display mode
+
+inst workspace = script.Parent
+
+-- Workspace Display Mode
+-- THREED: 3D workspace with 3D objects and camera
+-- TWOD: 2D workspace with 2D sprites and top-down view  
+-- OFF: No workspace display (for web applications)
+workspace.DisplayMode = "${mode}"
+
+-- Workspace Properties
+workspace.Name = "Workspace"
+workspace.Enabled = ${mode !== 'OFF' ? 'true' : 'false'}
+
+-- Camera Settings (for 3D and 2D modes)
+if workspace.DisplayMode == "THREED" then
+    workspace.Camera.Type = "Perspective"
+    workspace.Camera.Position = { x: 10, y: 10, z: 10 }
+    workspace.Camera.LookAt = { x: 0, y: 0, z: 0 }
+    workspace.Physics.Enabled = true
+    workspace.Physics.Gravity = { x: 0, y: -50, z: 0 }
+elseif workspace.DisplayMode == "TWOD" then
+    workspace.Camera.Type = "Orthographic"
+    workspace.Camera.Position = { x: 0, y: 0, z: 10 }
+    workspace.Camera.LookAt = { x: 0, y: 0, z: 0 }
+    workspace.Physics.Enabled = true
+    workspace.Physics.Gravity = { x: 0, y: -50, z: 0 }
+else
+    workspace.Camera.Enabled = false
+    workspace.Physics.Enabled = false
+end
+
+print("Workspace configured for " + workspace.DisplayMode + " mode")`;
   };
 
   const getTemplateScript = (projectType: string, scriptType: string) => {
@@ -707,6 +747,7 @@ function addExperience(playerId, exp) {
                       <li>• Camera controls (Third/First person)</li>
                       <li>• Input handling scripts</li>
                       <li>• THREEDStorage plugin</li>
+                      <li>• Workspace Config (THREED mode)</li>
                     </>
                   )}
                   {projectType === 'game2d' && (
@@ -717,6 +758,7 @@ function addExperience(playerId, exp) {
                       <li>• 2D physics</li>
                       <li>• Input handling</li>
                       <li>• Starter character sprite with Ploid</li>
+                      <li>• Workspace Config (TWOD mode)</li>
                     </>
                   )}
                   {projectType === 'webapp' && (
@@ -726,6 +768,7 @@ function addExperience(playerId, exp) {
                       <li>• User management</li>
                       <li>• Frontend components</li>
                       <li>• Advanced syntax highlighter</li>
+                      <li>• Workspace Config (OFF mode)</li>
                     </>
                   )}
                   {projectType === 'blank' && (
@@ -734,6 +777,7 @@ function addExperience(playerId, exp) {
                       <li>• No pre-built templates</li>
                       <li>• Complete creative freedom</li>
                       <li>• Build from scratch</li>
+                      <li>• Workspace Config (OFF mode)</li>
                     </>
                   )}
                   {projectType !== 'blank' && (

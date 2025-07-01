@@ -36,6 +36,20 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    // Auto-open workspace for game projects
+    if (project && (project.type === 'game3d' || project.type === 'game2d')) {
+      const workspaceTab: OpenTab = {
+        id: 'workspace-tab',
+        name: 'Workspace',
+        type: project.type === 'game3d' ? 'workspace3d' : 'workspace2d',
+        file: { id: 'workspace', name: 'Workspace', type: project.type === 'game3d' ? 'workspace3d' : 'workspace2d' }
+      };
+      setOpenTabs([workspaceTab]);
+      setActiveTabId('workspace-tab');
+    }
+  }, [project]);
+
   if (isLoading) {
     return <LoadingScreen />;
   }

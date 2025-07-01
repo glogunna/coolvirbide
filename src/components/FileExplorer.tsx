@@ -42,7 +42,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         type: project.type === 'game3d' ? 'workspace3d' : project.type === 'game2d' ? 'workspace2d' : 'workspace',
         children: project.services.workspace.objects.map((obj: any) => ({
           ...obj,
-          icon: <Box className="w-4 h-4 text-indigo-400" />
+          icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : <Box className="w-4 h-4 text-indigo-400" />
         }))
       },
       {

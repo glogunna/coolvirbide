@@ -189,29 +189,27 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
   const [services, setServices] = useState(() => buildServicesFromProject());
 
   const objectTypes = [
-    { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties', allowedParents: ['workspace', 'folder', 'model', 'ploid'] },
-    { id: 'model', name: 'Model', icon: '🏗️', description: 'Container for 3D objects', allowedParents: ['workspace', 'folder', 'serverStorage'] },
-    { id: 'folder', name: 'Folder', icon: '📁', description: 'Organize objects in folders', allowedParents: ['workspace', 'replicatedStorage', 'serverStorage', 'folder', 'model'] },
-    { id: 'vscript', name: 'Server Script', icon: '📜', description: 'Server-side script (.vscript)', allowedParents: ['replicatedStorage', 'serverStorage', 'folder'] },
-    { id: 'vlscript', name: 'Client Script', icon: '📋', description: 'Client-side script (.vlscript)', allowedParents: ['replicatedStorage', 'serverStorage', 'folder'] },
-    { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script (.vdata)', allowedParents: ['replicatedFirst', 'folder'] },
-    { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller', allowedParents: ['serverStorage', 'folder', 'model'] },
-    { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block', allowedParents: ['workspace', 'folder', 'model'] },
-    { id: 'sphere', name: 'Sphere', icon: '⚪', description: '3D sphere', allowedParents: ['workspace', 'folder', 'model'] },
-    { id: 'cylinder', name: 'Cylinder', icon: '🥫', description: '3D cylinder', allowedParents: ['workspace', 'folder', 'model'] },
-    { id: 'image', name: 'Image/Texture', icon: '🖼️', description: 'Image or texture file', allowedParents: ['replicatedStorage', 'folder'] },
-    { id: 'sound', name: 'Sound', icon: '🔊', description: 'Audio file', allowedParents: ['replicatedStorage', 'soundService', 'folder'] },
-    { id: 'video', name: 'Video', icon: '🎬', description: 'Video file', allowedParents: ['mediaService', 'folder'] },
-    { id: 'ui', name: 'UI Screen', icon: '📱', description: 'User interface screen', allowedParents: ['uiService', 'folder'] }
+    { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties' },
+    { id: 'model', name: 'Model', icon: '🏗️', description: 'Container for 3D objects' },
+    { id: 'folder', name: 'Folder', icon: '📁', description: 'Organize objects in folders' },
+    { id: 'vscript', name: 'Server Script', icon: '📜', description: 'Server-side script (.vscript)' },
+    { id: 'vlscript', name: 'Client Script', icon: '📋', description: 'Client-side script (.vlscript)' },
+    { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script (.vdata)' },
+    { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller' },
+    { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block' },
+    { id: 'sphere', name: 'Sphere', icon: '⚪', description: '3D sphere' },
+    { id: 'cylinder', name: 'Cylinder', icon: '🥫', description: '3D cylinder' },
+    { id: 'image', name: 'Image/Texture', icon: '🖼️', description: 'Image or texture file' },
+    { id: 'sound', name: 'Sound', icon: '🔊', description: 'Audio file' },
+    { id: 'video', name: 'Video', icon: '🎬', description: 'Video file' },
+    { id: 'ui', name: 'UI Screen', icon: '📱', description: 'User interface screen' }
   ];
 
-  const getFilteredObjectTypes = (parentType: string) => {
+  const getFilteredObjectTypes = () => {
     return objectTypes.filter(type => {
       const matchesSearch = type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            type.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const allowedForParent = type.allowedParents.includes(parentType) || 
-                              type.allowedParents.includes('folder') && parentType === 'folder';
-      return matchesSearch && allowedForParent;
+      return matchesSearch;
     });
   };
 
@@ -450,18 +448,10 @@ print("Configuration loaded")`;
     // Can't drop on self or children
     if (targetItem.id === sourceItem.id) return false;
     
-    // Check if target can have children
-    const canHaveChildren = ['workspace', 'replicatedStorage', 'serverStorage', 'folder', 'model', 'ploid', 'soundService', 'mediaService', 'uiService', 'threedStorage', 'replicatedFirst'].includes(targetItem.id) || 
-                           targetItem.type === 'folder' || targetItem.type === 'model' || targetItem.type === 'ploid';
+    // Check if target can have children (most objects can now accept children)
+    const canHaveChildren = true; // Allow dropping on any object for maximum flexibility
     
-    if (!canHaveChildren) return false;
-
-    // Check if source type is allowed in target
-    const sourceType = sourceItem.type;
-    const targetType = targetItem.id || targetItem.type;
-    
-    const allowedParents = objectTypes.find(type => type.id === sourceType)?.allowedParents || [];
-    return allowedParents.includes(targetType) || (allowedParents.includes('folder') && targetType === 'folder');
+    return canHaveChildren;
   };
 
   const handleDragStart = (e: React.DragEvent, item: any, path: string[]) => {
@@ -520,7 +510,6 @@ print("Configuration loaded")`;
     const isExpanded = expandedFolders.has(item.id);
     const hasChildren = item.children && item.children.length > 0;
     const isSelected = currentFile?.id === item.id;
-    const canHaveChildren = ['workspace', 'replicatedStorage', 'serverStorage', 'folder', 'model', 'ploid', 'soundService', 'mediaService', 'uiService', 'threedStorage', 'replicatedFirst'].includes(item.id) || item.type === 'folder' || item.type === 'model' || item.type === 'ploid';
     const isProtected = protectedItems.has(item.id);
     const isDragOver = dragOverItem === item.id;
     const canDrag = !isProtected;
@@ -618,8 +607,8 @@ print("Configuration loaded")`;
               </button>
             )}
             
-            {/* More options for items without add/rename/delete */}
-            {!canHaveChildren && isProtected && (
+            {/* More options for protected items */}
+            {isProtected && (
               <button className="p-0.5 hover:bg-gray-600 rounded transition-colors">
                 <MoreHorizontal className="w-3 h-3 text-gray-400" />
               </button>
@@ -694,7 +683,7 @@ print("Configuration loaded")`;
             </div>
             
             <div className="space-y-1">
-              {getFilteredObjectTypes(addMenuParent.item.id).map((type) => (
+              {getFilteredObjectTypes().map((type) => (
                 <button
                   key={type.id}
                   onClick={() => addObjectToHierarchy(type.id, addMenuParent.path)}
@@ -707,9 +696,9 @@ print("Configuration loaded")`;
                   </div>
                 </button>
               ))}
-              {getFilteredObjectTypes(addMenuParent.item.id).length === 0 && (
+              {getFilteredObjectTypes().length === 0 && (
                 <div className="text-gray-400 text-center py-4">
-                  {searchTerm ? 'No objects match your search' : 'No objects can be added here'}
+                  No objects match your search
                 </div>
               )}
             </div>

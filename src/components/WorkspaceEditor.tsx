@@ -17,7 +17,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
   const [tool, setTool] = useState('move');
   const [objects, setObjects] = useState<any[]>([]);
   const [keys, setKeys] = useState<Set<string>>(new Set());
-  const [transformControls, setTransformControls] = useState<any>(null);
+  const [isDraggingGizmo, setIsDraggingGizmo] = useState(false);
+  const [dragStartPosition, setDragStartPosition] = useState<THREE.Vector3 | null>(null);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -119,6 +120,19 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
+      
+      // Check for gizmo interaction first
+      const gizmos = scene.children.filter(obj => obj.name.includes('gizmo'));
+      const gizmoIntersects = raycaster.intersectObjects(gizmos);
+      
+      if (gizmoIntersects.length > 0 && selectedObject) {
+        // Start gizmo interaction
+        setIsDraggingGizmo(true);
+        setDragStartPosition(selectedObject.mesh.position.clone());
+        return;
+      }
+
+      // Check for object selection
       const selectableObjects = scene.children.filter(obj => obj.userData.selectable);
       const intersects = raycaster.intersectObjects(selectableObjects);
 
@@ -135,6 +149,54 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         isDragging = true;
         previousMousePosition = { x: event.clientX, y: event.clientY };
       }
+    };
+
+    const onMouseMove = (event: MouseEvent) => {
+      if (isDraggingGizmo && selectedObject) {
+        // Handle gizmo dragging
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        
+        // Create a plane for intersection
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const intersection = new THREE.Vector3();
+        raycaster.ray.intersectPlane(plane, intersection);
+
+        if (tool === 'move') {
+          selectedObject.mesh.position.copy(intersection);
+          selectedObject.mesh.position.y = Math.max(selectedObject.mesh.position.y, 1);
+          updateGizmoPositions(selectedObject.mesh);
+        }
+        return;
+      }
+
+      if (!isDragging) return;
+
+      const deltaMove = {
+        x: event.clientX - previousMousePosition.x,
+        y: event.clientY - previousMousePosition.y
+      };
+
+      // Rotate camera around the scene
+      const spherical = new THREE.Spherical();
+      spherical.setFromVector3(camera.position);
+      spherical.theta -= deltaMove.x * 0.01;
+      spherical.phi += deltaMove.y * 0.01;
+      spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+
+      camera.position.setFromSpherical(spherical);
+      camera.lookAt(0, 0, 0);
+
+      previousMousePosition = { x: event.clientX, y: event.clientY };
+    };
+
+    const onMouseUp = () => {
+      isDragging = false;
+      setIsDraggingGizmo(false);
+      setDragStartPosition(null);
     };
 
     const highlightObject = (object: THREE.Object3D) => {
@@ -167,6 +229,20 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       gizmos.forEach(gizmo => scene.remove(gizmo));
     };
 
+    const updateGizmoPositions = (object: THREE.Object3D) => {
+      const gizmos = scene.children.filter(obj => obj.name.includes('gizmo'));
+      gizmos.forEach(gizmo => {
+        gizmo.position.copy(object.position);
+        if (gizmo.name.includes('x')) gizmo.position.x += 2;
+        if (gizmo.name.includes('y')) gizmo.position.y += 2;
+        if (gizmo.name.includes('z')) gizmo.position.z += 2;
+      });
+      
+      // Update outline position
+      const outlines = scene.children.filter(obj => obj.name === 'outline');
+      outlines.forEach(outline => outline.position.copy(object.position));
+    };
+
     const addTransformGizmos = (object: THREE.Object3D) => {
       if (tool === 'move') {
         addMoveGizmos(object);
@@ -189,6 +265,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       xArrow.position.x += arrowLength;
       xArrow.rotation.z = -Math.PI / 2;
       xArrow.name = 'move-gizmo-x';
+      xArrow.userData = { isGizmo: true, axis: 'x' };
       scene.add(xArrow);
 
       // Y axis (green)
@@ -198,6 +275,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       yArrow.position.copy(object.position);
       yArrow.position.y += arrowLength;
       yArrow.name = 'move-gizmo-y';
+      yArrow.userData = { isGizmo: true, axis: 'y' };
       scene.add(yArrow);
 
       // Z axis (blue)
@@ -208,6 +286,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       zArrow.position.z += arrowLength;
       zArrow.rotation.x = Math.PI / 2;
       zArrow.name = 'move-gizmo-z';
+      zArrow.userData = { isGizmo: true, axis: 'z' };
       scene.add(zArrow);
     };
 
@@ -221,6 +300,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       xRing.position.copy(object.position);
       xRing.rotation.y = Math.PI / 2;
       xRing.name = 'rotate-gizmo-x';
+      xRing.userData = { isGizmo: true, axis: 'x' };
       scene.add(xRing);
 
       // Y axis rotation ring (green)
@@ -230,6 +310,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       yRing.position.copy(object.position);
       yRing.rotation.x = Math.PI / 2;
       yRing.name = 'rotate-gizmo-y';
+      yRing.userData = { isGizmo: true, axis: 'y' };
       scene.add(yRing);
 
       // Z axis rotation ring (blue)
@@ -238,6 +319,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       const zRing = new THREE.Mesh(zRingGeometry, zRingMaterial);
       zRing.position.copy(object.position);
       zRing.name = 'rotate-gizmo-z';
+      zRing.userData = { isGizmo: true, axis: 'z' };
       scene.add(zRing);
     };
 
@@ -251,6 +333,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       xCube.position.copy(object.position);
       xCube.position.x += 2;
       xCube.name = 'scale-gizmo-x';
+      xCube.userData = { isGizmo: true, axis: 'x' };
       scene.add(xCube);
 
       // Y axis (green)
@@ -260,6 +343,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       yCube.position.copy(object.position);
       yCube.position.y += 2;
       yCube.name = 'scale-gizmo-y';
+      yCube.userData = { isGizmo: true, axis: 'y' };
       scene.add(yCube);
 
       // Z axis (blue)
@@ -269,32 +353,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       zCube.position.copy(object.position);
       zCube.position.z += 2;
       zCube.name = 'scale-gizmo-z';
+      zCube.userData = { isGizmo: true, axis: 'z' };
       scene.add(zCube);
-    };
-
-    const onMouseMove = (event: MouseEvent) => {
-      if (!isDragging) return;
-
-      const deltaMove = {
-        x: event.clientX - previousMousePosition.x,
-        y: event.clientY - previousMousePosition.y
-      };
-
-      // Rotate camera around the scene
-      const spherical = new THREE.Spherical();
-      spherical.setFromVector3(camera.position);
-      spherical.theta += deltaMove.x * 0.01;
-      spherical.phi -= deltaMove.y * 0.01;
-      spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
-
-      camera.position.setFromSpherical(spherical);
-      camera.lookAt(0, 0, 0);
-
-      previousMousePosition = { x: event.clientX, y: event.clientY };
-    };
-
-    const onMouseUp = () => {
-      isDragging = false;
     };
 
     const onWheel = (event: WheelEvent) => {
@@ -326,33 +386,9 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    // Camera movement with WASD
-    const moveCamera = () => {
-      const moveSpeed = 0.5;
-      const forward = new THREE.Vector3();
-      const right = new THREE.Vector3();
-      
-      camera.getWorldDirection(forward);
-      right.crossVectors(forward, camera.up);
-      
-      if (keys.has('w')) {
-        camera.position.addScaledVector(forward, moveSpeed);
-      }
-      if (keys.has('s')) {
-        camera.position.addScaledVector(forward, -moveSpeed);
-      }
-      if (keys.has('a')) {
-        camera.position.addScaledVector(right, -moveSpeed);
-      }
-      if (keys.has('d')) {
-        camera.position.addScaledVector(right, moveSpeed);
-      }
-    };
-
     // Animation loop
     const animate = () => {
       requestAnimationFrame(animate);
-      moveCamera();
       renderer.render(scene, camera);
     };
     animate();
@@ -365,7 +401,50 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       window.removeEventListener('keyup', onKeyUp);
       renderer.dispose();
     };
-  }, [project, keys]);
+  }, [project]);
+
+  // FIXED: Camera movement with WASD - moved outside useEffect to prevent teleporting
+  useEffect(() => {
+    if (!cameraRef.current) return;
+
+    const moveSpeed = 0.5;
+    const camera = cameraRef.current;
+    
+    const moveCamera = () => {
+      const forward = new THREE.Vector3();
+      const right = new THREE.Vector3();
+      
+      camera.getWorldDirection(forward);
+      right.crossVectors(forward, camera.up);
+      
+      let moved = false;
+      
+      if (keys.has('w')) {
+        camera.position.addScaledVector(forward, moveSpeed);
+        moved = true;
+      }
+      if (keys.has('s')) {
+        camera.position.addScaledVector(forward, -moveSpeed);
+        moved = true;
+      }
+      if (keys.has('a')) {
+        camera.position.addScaledVector(right, -moveSpeed);
+        moved = true;
+      }
+      if (keys.has('d')) {
+        camera.position.addScaledVector(right, moveSpeed);
+        moved = true;
+      }
+      
+      if (moved) {
+        // Don't reset lookAt when moving with WASD
+        // This allows free camera movement
+      }
+    };
+
+    const animationId = setInterval(moveCamera, 16); // ~60fps
+    return () => clearInterval(animationId);
+  }, [keys]);
 
   // Update gizmos when tool changes
   useEffect(() => {
@@ -403,6 +482,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     xArrow.position.x += arrowLength;
     xArrow.rotation.z = -Math.PI / 2;
     xArrow.name = 'move-gizmo-x';
+    xArrow.userData = { isGizmo: true, axis: 'x' };
     scene.add(xArrow);
 
     // Y axis (green)
@@ -412,6 +492,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     yArrow.position.copy(object.position);
     yArrow.position.y += arrowLength;
     yArrow.name = 'move-gizmo-y';
+    yArrow.userData = { isGizmo: true, axis: 'y' };
     scene.add(yArrow);
 
     // Z axis (blue)
@@ -422,6 +503,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     zArrow.position.z += arrowLength;
     zArrow.rotation.x = Math.PI / 2;
     zArrow.name = 'move-gizmo-z';
+    zArrow.userData = { isGizmo: true, axis: 'z' };
     scene.add(zArrow);
   };
 
@@ -438,6 +520,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     xRing.position.copy(object.position);
     xRing.rotation.y = Math.PI / 2;
     xRing.name = 'rotate-gizmo-x';
+    xRing.userData = { isGizmo: true, axis: 'x' };
     scene.add(xRing);
 
     // Y axis rotation ring (green)
@@ -447,6 +530,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     yRing.position.copy(object.position);
     yRing.rotation.x = Math.PI / 2;
     yRing.name = 'rotate-gizmo-y';
+    yRing.userData = { isGizmo: true, axis: 'y' };
     scene.add(yRing);
 
     // Z axis rotation ring (blue)
@@ -455,6 +539,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     const zRing = new THREE.Mesh(zRingGeometry, zRingMaterial);
     zRing.position.copy(object.position);
     zRing.name = 'rotate-gizmo-z';
+    zRing.userData = { isGizmo: true, axis: 'z' };
     scene.add(zRing);
   };
 
@@ -471,6 +556,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     xCube.position.copy(object.position);
     xCube.position.x += 2;
     xCube.name = 'scale-gizmo-x';
+    xCube.userData = { isGizmo: true, axis: 'x' };
     scene.add(xCube);
 
     // Y axis (green)
@@ -480,6 +566,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     yCube.position.copy(object.position);
     yCube.position.y += 2;
     yCube.name = 'scale-gizmo-y';
+    yCube.userData = { isGizmo: true, axis: 'y' };
     scene.add(yCube);
 
     // Z axis (blue)
@@ -489,6 +576,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     zCube.position.copy(object.position);
     zCube.position.z += 2;
     zCube.name = 'scale-gizmo-z';
+    zCube.userData = { isGizmo: true, axis: 'z' };
     scene.add(zCube);
   };
 
@@ -670,9 +758,10 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         <div className="absolute bottom-4 left-4 bg-black bg-opacity-70 text-white p-3 rounded-lg text-sm">
           <div className="space-y-1">
             <div>Mouse Drag: Rotate camera</div>
-            <div>WASD: Move camera</div>
+            <div className="text-green-400">WASD: Move camera freely</div>
             <div>Scroll: Zoom in/out</div>
             <div>Click objects to select</div>
+            <div className="text-yellow-400">Drag gizmos to transform</div>
             <div className="text-green-400">Tool: {tool.charAt(0).toUpperCase() + tool.slice(1)}</div>
           </div>
         </div>

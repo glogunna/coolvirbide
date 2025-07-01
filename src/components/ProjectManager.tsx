@@ -1,4 +1,3 @@
-```tsx
 import React, { useState } from 'react';
 import { Infinity, Plus, Folder, Globe, Gamepad2, Smartphone, AlertTriangle, FileText } from 'lucide-react';
 
@@ -489,7 +488,7 @@ function updateMovement(deltaTime) {
     -- Apply friction
     velocity.x = velocity.x * 0.9
     velocity.z = velocity.z * 0.9
-}
+end
 
 function checkGroundCollision() {
     -- Simple ground check
@@ -500,7 +499,7 @@ function checkGroundCollision() {
     else
         isGrounded = false
     end
-}
+end
 
 function moveForward(speed) {
     velocity.z = velocity.z - speed * 0.1
@@ -508,15 +507,15 @@ function moveForward(speed) {
 
 function moveBackward(speed) {
     velocity.z = velocity.z + speed * 0.1
-}
+end
 
 function moveLeft(speed) {
     velocity.x = velocity.x - speed * 0.1
-}
+end
 
 function moveRight(speed) {
     velocity.x = velocity.x + speed * 0.1
-}
+end
 
 function jump(power) {
     if isGrounded then
@@ -716,7 +715,7 @@ function addExperience(playerId, exp) {
                 <button
                   key={type.id}
                   onClick={() => setProjectType(type.id)}
-                  className={\`w-full p-4 rounded-xl border-2 transition-all text-left ${
+                  className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
                     projectType === type.id
                       ? 'border-green-400 bg-green-400/10'
                       : 'border-gray-600 hover:border-gray-500 bg-gray-700/50'
@@ -845,4 +844,3 @@ function addExperience(playerId, exp) {
     </div>
   );
 };
-```

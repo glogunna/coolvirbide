@@ -181,13 +181,13 @@ workspace.Name = "Workspace"
 workspace.Enabled = ${mode !== 'OFF' ? 'true' : 'false'}
 
 -- Camera Settings (for 3D and 2D modes)
-if workspace.DisplayMode == "THREED" then
+if workspace.DisplayMode == "THREED\" then
     workspace.Camera.Type = "Perspective"
     workspace.Camera.Position = { x: 10, y: 10, z: 10 }
     workspace.Camera.LookAt = { x: 0, y: 0, z: 0 }
     workspace.Physics.Enabled = true
     workspace.Physics.Gravity = { x: 0, y: -50, z: 0 }
-elseif workspace.DisplayMode == "TWOD" then
+elseif workspace.DisplayMode == "TWOD\" then
     workspace.Camera.Type = "Orthographic"
     workspace.Camera.Position = { x: 0, y: 0, z: 10 }
     workspace.Camera.LookAt = { x: 0, y: 0, z: 0 }
@@ -387,28 +387,28 @@ inst keysPressed = {}
 function onKeyDown(key) {
     keysPressed[key] = true
     
-    if key == "W" then
+    if key == "W\" then
         character.moveForward(ploidConfig.WalkSpeed)
-    elseif key == "S" then
+    elseif key == "S\" then
         character.moveBackward(ploidConfig.WalkSpeed)
-    elseif key == "A" then
+    elseif key == "A\" then
         character.moveLeft(ploidConfig.WalkSpeed)
-    elseif key == "D" then
+    elseif key == "D\" then
         character.moveRight(ploidConfig.WalkSpeed)
-    elseif key == "Space" then
+    elseif key == "Space\" then
         character.jump(ploidConfig.JumpPower)
     end
-end
+}
 
 function onKeyUp(key) {
     keysPressed[key] = false
     
-    if key == "W" or key == "S" then
+    if key == "W\" or key == "S\" then
         character.stopMovingForward()
-    elseif key == "A" or key == "D" then
+    elseif key == "A\" or key == "D\" then
         character.stopMovingLeft()
     end
-end
+}
 
 inputService.onKeyDown(onKeyDown)
 inputService.onKeyUp(onKeyUp)`;
@@ -426,36 +426,36 @@ inst sensitivity = 0.5
 inst distance = 20
 
 function updateCamera() {
-    if cameraType == "ThirdPerson" then
+    if cameraType == "ThirdPerson\" then
         -- Third person camera
         inst offset = { x: 0, y: 5, z: distance }
         camera.position = character.position + offset
         camera.lookAt(character.position)
-    elseif cameraType == "FirstPerson" then
+    elseif cameraType == "FirstPerson\" then
         -- First person camera
         camera.position = character.position + { x: 0, y: 1.5, z: 0 }
         camera.rotation = character.rotation
-    elseif cameraType == "TopDown" then
+    elseif cameraType == "TopDown\" then
         -- Top-down camera
         camera.position = character.position + { x: 0, y: 30, z: 0 }
         camera.lookAt(character.position)
     end
-end
+}
 
 function onMouseMove(deltaX, deltaY) {
-    if cameraType == "ThirdPerson" then
+    if cameraType == "ThirdPerson\" then
         -- Rotate camera around character
         camera.rotateAroundTarget(character.position, deltaX * sensitivity, deltaY * sensitivity)
-    elseif cameraType == "FirstPerson" then
+    elseif cameraType == "FirstPerson\" then
         -- Rotate character
         character.rotate(deltaX * sensitivity, deltaY * sensitivity)
     end
-end
+}
 
 function setCameraType(newType) {
     cameraType = newType
     updateCamera()
-end
+}
 
 -- Expose camera controls
 character.SetCameraType = setCameraType
@@ -489,7 +489,7 @@ function updateMovement(deltaTime) {
     -- Apply friction
     velocity.x = velocity.x * 0.9
     velocity.z = velocity.z * 0.9
-end
+}
 
 function checkGroundCollision() {
     -- Simple ground check
@@ -500,38 +500,38 @@ function checkGroundCollision() {
     else
         isGrounded = false
     end
-end
+}
 
-function moveForward(speed)
+function moveForward(speed) {
     velocity.z = velocity.z - speed * 0.1
-end
+}
 
-function moveBackward(speed)
+function moveBackward(speed) {
     velocity.z = velocity.z + speed * 0.1
-end
+}
 
-function moveLeft(speed)
+function moveLeft(speed) {
     velocity.x = velocity.x - speed * 0.1
-end
+}
 
-function moveRight(speed)
+function moveRight(speed) {
     velocity.x = velocity.x + speed * 0.1
-end
+}
 
-function jump(power)
+function jump(power) {
     if isGrounded then
         velocity.y = power
         isGrounded = false
     end
-end
+}
 
-function stopMovingForward()
+function stopMovingForward() {
     velocity.z = velocity.z * 0.5
-end
+}
 
-function stopMovingLeft()
+function stopMovingLeft() {
     velocity.x = velocity.x * 0.5
-end
+}
 
 -- Expose movement functions
 character.moveForward = moveForward
@@ -716,7 +716,7 @@ function addExperience(playerId, exp) {
                 <button
                   key={type.id}
                   onClick={() => setProjectType(type.id)}
-                  className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
+                  className={\`w-full p-4 rounded-xl border-2 transition-all text-left ${
                     projectType === type.id
                       ? 'border-green-400 bg-green-400/10'
                       : 'border-gray-600 hover:border-gray-500 bg-gray-700/50'

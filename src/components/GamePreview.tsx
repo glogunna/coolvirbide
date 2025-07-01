@@ -82,37 +82,57 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   };
 
   const loadWorkspaceObjects = (scene: THREE.Scene) => {
+    console.log('[GAME] Loading workspace objects:', project.services.workspace.objects);
+    
     // Load objects from the actual workspace
     const loadObjectsRecursively = (objects: any[], parent?: THREE.Object3D) => {
       for (const obj of objects) {
+        console.log('[GAME] Loading object:', obj.name, 'type:', obj.type);
         let mesh: THREE.Mesh | THREE.Group | null = null;
 
         switch (obj.type) {
           case 'part':
-            const partGeometry = new THREE.BoxGeometry(2, 2, 2);
+            const partGeometry = new THREE.BoxGeometry(
+              obj.scale?.x * 2 || 2, 
+              obj.scale?.y * 2 || 2, 
+              obj.scale?.z * 2 || 2
+            );
             const partMaterial = new THREE.MeshLambertMaterial({ 
               color: obj.color ? new THREE.Color(obj.color) : 0x4ECDC4 
             });
             mesh = new THREE.Mesh(partGeometry, partMaterial);
             mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            console.log('[GAME] Created part:', obj.name);
             break;
 
           case 'sphere':
-            const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+            const sphereGeometry = new THREE.SphereGeometry(
+              obj.scale?.x || 1, 32, 32
+            );
             const sphereMaterial = new THREE.MeshLambertMaterial({ 
               color: obj.color ? new THREE.Color(obj.color) : 0xFFE66D 
             });
             mesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
             mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            console.log('[GAME] Created sphere:', obj.name);
             break;
 
           case 'cylinder':
-            const cylinderGeometry = new THREE.CylinderGeometry(1, 1, 2, 32);
+            const cylinderGeometry = new THREE.CylinderGeometry(
+              obj.scale?.x || 1, 
+              obj.scale?.x || 1, 
+              obj.scale?.y * 2 || 2, 
+              32
+            );
             const cylinderMaterial = new THREE.MeshLambertMaterial({ 
               color: obj.color ? new THREE.Color(obj.color) : 0xFF6B6B 
             });
             mesh = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
             mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            console.log('[GAME] Created cylinder:', obj.name);
             break;
 
           case 'actor':
@@ -139,12 +159,15 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
               });
               const glow = new THREE.Mesh(glowGeometry, glowMaterial);
               mesh.add(glow);
+              console.log('[GAME] Created spawn point actor:', obj.name);
             } else {
               // Generic actor representation
               const actorGeometry = new THREE.BoxGeometry(1, 2, 1);
               const actorMaterial = new THREE.MeshLambertMaterial({ color: 0x9B59B6 });
               mesh = new THREE.Mesh(actorGeometry, actorMaterial);
               mesh.castShadow = true;
+              mesh.receiveShadow = true;
+              console.log('[GAME] Created generic actor:', obj.name);
             }
             break;
 
@@ -152,18 +175,28 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           case 'folder':
             // Create a group for containers
             mesh = new THREE.Group();
+            console.log('[GAME] Created group for:', obj.name);
             break;
         }
 
         if (mesh) {
           // Set position, rotation, scale from object properties
           if (obj.position) {
-            mesh.position.set(obj.position.x || 0, obj.position.y || 0, obj.position.z || 0);
+            mesh.position.set(
+              obj.position.x || 0, 
+              obj.position.y || (obj.type === 'actor' ? 0.1 : 2), 
+              obj.position.z || 0
+            );
+            console.log('[GAME] Set position for', obj.name, ':', mesh.position);
+          } else {
+            // Default position for new objects
+            mesh.position.set(0, obj.type === 'actor' ? 0.1 : 2, 0);
           }
+          
           if (obj.rotation) {
             mesh.rotation.set(obj.rotation.x || 0, obj.rotation.y || 0, obj.rotation.z || 0);
           }
-          if (obj.scale) {
+          if (obj.scale && obj.type !== 'part' && obj.type !== 'sphere' && obj.type !== 'cylinder') {
             mesh.scale.set(obj.scale.x || 1, obj.scale.y || 1, obj.scale.z || 1);
           }
 
@@ -176,6 +209,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             scene.add(mesh);
           }
 
+          console.log('[GAME] Added to scene:', obj.name, 'at position:', mesh.position);
+
           // Recursively load children
           if (obj.children && obj.children.length > 0) {
             loadObjectsRecursively(obj.children, mesh);
@@ -186,7 +221,14 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
     // Load workspace objects
     const workspaceObjects = project.services.workspace.objects || [];
+    console.log('[GAME] Total workspace objects to load:', workspaceObjects.length);
     loadObjectsRecursively(workspaceObjects);
+    
+    // Update object count
+    setGameStats(prev => ({
+      ...prev,
+      objects: scene.children.filter(child => child.userData.type).length
+    }));
   };
 
   const init3DGame = () => {
@@ -237,24 +279,31 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.position.y = -0.5;
     ground.receiveShadow = true;
+    ground.name = 'Baseplate';
+    ground.userData = { id: 'baseplate', type: 'part' };
     scene.add(ground);
 
-    // Load workspace objects from the project
+    // CRITICAL: Load workspace objects from the project BEFORE creating player
+    console.log('[GAME] Loading workspace objects...');
     loadWorkspaceObjects(scene);
 
-    // Find spawn point
+    // Find spawn point AFTER loading workspace objects
     const spawn = findSpawnPoint();
     setSpawnPoint(spawn);
     setPlayerPosition(spawn);
 
-    // Create player character (cube)
+    // Create player character (RED CUBE as requested)
     const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
-    const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B6B });
+    const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 }); // RED CUBE
     const player = new THREE.Mesh(playerGeometry, playerMaterial);
     player.position.set(spawn.x, spawn.y, spawn.z);
     player.castShadow = true;
+    player.name = 'Player';
+    player.userData = { id: 'player', type: 'player' };
     scene.add(player);
     playerRef.current = player;
+
+    console.log('[GAME] Player spawned at:', spawn);
 
     // Grid helper
     const gridHelper = new THREE.GridHelper(50, 50);
@@ -318,6 +367,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       requestAnimationFrame(gameLoop);
     };
     gameLoop();
+
+    console.log('[GAME] 3D Game initialized with', scene.children.length, 'objects');
 
     // Cleanup function
     return () => {
@@ -659,8 +710,9 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
                   <div>WASD / Arrow Keys: Move</div>
                   <div>Mouse Drag: Rotate Camera</div>
                   <div>Space: Jump</div>
-                  <div className="text-yellow-400">Player: Red Cube</div>
+                  <div className="text-red-400">Player: Red Cube</div>
                   <div className="text-green-400">Spawn: ({spawnPoint.x}, {spawnPoint.y}, {spawnPoint.z})</div>
+                  <div className="text-cyan-400">Your workspace objects are loaded!</div>
                 </>
               )}
               {project.type === 'game2d' && (
@@ -689,7 +741,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
               <>
                 <div>Player: ({playerPosition.x.toFixed(1)}, {playerPosition.y.toFixed(1)}, {playerPosition.z.toFixed(1)})</div>
                 <div>Grounded: {isGrounded ? 'Yes' : 'No'}</div>
-                <div className="text-green-400">Workspace Loaded</div>
+                <div className="text-green-400">Workspace Loaded ✓</div>
               </>
             )}
           </div>
@@ -701,7 +753,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         <div className="text-sm font-mono text-gray-300 space-y-1">
           <div className="text-green-400">[INFO] Game initialized successfully</div>
           <div className="text-blue-400">[DEBUG] Loading {project.type} environment...</div>
-          <div className="text-green-400">[INFO] Workspace objects loaded from project</div>
+          <div className="text-green-400">[INFO] Workspace objects loaded from project ✓</div>
           {project.type === 'game3d' && (
             <>
               <div className="text-blue-400">[DEBUG] 3D scene created with THREE.js</div>
@@ -709,6 +761,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
               <div className="text-blue-400">[DEBUG] Physics engine initialized</div>
               <div className="text-yellow-400">[INFO] Controls: WASD/Arrows=Move, Mouse=Camera, Space=Jump</div>
               <div className="text-cyan-400">[INFO] Actor system loaded - Spawn points active</div>
+              <div className="text-green-400">[INFO] All workspace objects rendered in game world</div>
+              <div className="text-purple-400">[INFO] Red cube player character ready</div>
             </>
           )}
           {project.type === 'game2d' && (

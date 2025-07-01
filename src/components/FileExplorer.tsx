@@ -89,12 +89,26 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             type: project.type === 'game3d' ? 'workspace3d' : project.type === 'game2d' ? 'workspace2d' : 'workspace',
             icon: <Box className="w-4 h-4 text-indigo-400" />
           },
+          // Add ALL workspace objects directly here - this is the key fix!
           ...project.services.workspace.objects.map((obj: any) => ({
             ...obj,
             icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : 
                   obj.type === 'actor' ? <User className="w-4 h-4 text-green-400" /> :
+                  obj.type === 'part' ? <Box className="w-4 h-4 text-blue-400" /> :
+                  obj.type === 'sphere' ? <Box className="w-4 h-4 text-purple-400" /> :
+                  obj.type === 'cylinder' ? <Box className="w-4 h-4 text-yellow-400" /> :
+                  obj.type === 'model' ? <Box className="w-4 h-4 text-orange-400" /> :
+                  obj.type === 'folder' ? <Folder className="w-4 h-4 text-gray-400" /> :
                   <Box className="w-4 h-4 text-indigo-400" />,
-            children: obj.children || []
+            children: obj.children ? obj.children.map((child: any) => ({
+              ...child,
+              icon: child.type === 'config' ? <ScriptIcon type={child.type} /> :
+                    child.type === 'vscript' ? <ScriptIcon type="basic" /> :
+                    child.type === 'vlscript' ? <ScriptIcon type="home" /> :
+                    child.type === 'vdata' ? <ScriptIcon type="vdata" /> :
+                    <FileText className="w-4 h-4 text-gray-300" />,
+              children: child.children || []
+            })) : []
           }))
         ]
       },
@@ -236,6 +250,12 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         position: { x: 0, y: 1, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 1, z: 1 }
+      }),
+      ...(['part', 'sphere', 'cylinder'].includes(type) && {
+        position: { x: 0, y: 2, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        color: '#' + Math.floor(Math.random()*16777215).toString(16)
       })
     };
 
@@ -268,9 +288,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
       if (!current.children) current.children = [];
       current.children.push(newObject);
       setServices(updatedServices);
+      
+      // CRITICAL: Update the project data so the game preview can see the new objects
+      updateProjectData(updatedServices);
     }
 
     setShowAddMenu(false);
+  };
+
+  // CRITICAL: Function to sync changes back to project data
+  const updateProjectData = (updatedServices: any[]) => {
+    const workspaceService = updatedServices.find(service => service.id === 'workspace');
+    if (workspaceService) {
+      // Filter out the workspace-view item and update the project
+      const workspaceObjects = workspaceService.children.filter((child: any) => child.id !== 'workspace-view');
+      project.services.workspace.objects = workspaceObjects;
+    }
   };
 
   const getActorConfigContent = () => {
@@ -392,6 +425,9 @@ print("Actor configured as: " + actor.Role)`;
       if (!targetParent.children) targetParent.children = [];
       targetParent.children.push(sourceItem);
       setServices(updatedServices);
+      
+      // Update project data
+      updateProjectData(updatedServices);
     }
   };
 
@@ -494,6 +530,9 @@ print("Configuration loaded")`;
       if (objectIndex !== -1) {
         current.children.splice(objectIndex, 1);
         setServices(updatedServices);
+        
+        // Update project data
+        updateProjectData(updatedServices);
       }
     }
   };
@@ -522,6 +561,9 @@ print("Configuration loaded")`;
     if (current) {
       current.name = newName;
       setServices(updatedServices);
+      
+      // Update project data
+      updateProjectData(updatedServices);
     }
   };
 

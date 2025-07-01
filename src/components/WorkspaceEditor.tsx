@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { RotateCcw, Move, RotateCw, Scale, Trash2, Plus, Eye, EyeOff, Search, Edit2 } from 'lucide-react';
+import { RotateCcw, Move, RotateCw, Scale, Trash2, Plus, Eye, EyeOff, Search, Edit2, User } from 'lucide-react';
 import * as THREE from 'three';
 
 interface WorkspaceEditorProps {
@@ -29,10 +29,11 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties' },
     { id: 'model', name: 'Model', icon: '🏗️', description: 'Container for 3D objects' },
     { id: 'folder', name: 'Folder', icon: '📁', description: 'Organize objects in folders' },
-    { id: 'vscript', name: 'Server Script', icon: '📜', description: 'Server-side script' },
-    { id: 'vlscript', name: 'Client Script', icon: '📋', description: 'Client-side script' },
+    { id: 'vscript', name: 'Basic Script', icon: '📜', description: 'Server-side script' },
+    { id: 'vlscript', name: 'Home Script', icon: '📋', description: 'Client-side script' },
     { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script' },
     { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller' },
+    { id: 'actor', name: 'Actor', icon: '👤', description: 'Interactive game actor with configurable role' },
     { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block' },
     { id: 'sphere', name: 'Sphere', icon: '⚪', description: '3D sphere' },
     { id: 'cylinder', name: 'Cylinder', icon: '🥫', description: '3D cylinder' },
@@ -132,6 +133,29 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       sphere.userData = { id: 'ball1', name: 'Ball', type: 'sphere', selectable: true };
       scene.add(sphere);
 
+      // Add an Actor (spawn point)
+      const actorGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
+      const actorMaterial = new THREE.MeshLambertMaterial({ 
+        color: 0x00FF00,
+        transparent: true,
+        opacity: 0.7
+      });
+      const actor = new THREE.Mesh(actorGeometry, actorMaterial);
+      actor.position.set(-5, 0.1, 0);
+      actor.name = 'SpawnPoint';
+      actor.userData = { id: 'spawn1', name: 'SpawnPoint', type: 'actor', selectable: true };
+      scene.add(actor);
+
+      // Add glow effect to actor
+      const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
+      const glowMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x00FF00,
+        transparent: true,
+        opacity: 0.3
+      });
+      const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+      actor.add(glow);
+
       initialObjects.push(
         { 
           id: 'part1', 
@@ -152,6 +176,22 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
           selectable: true,
           parent: 'workspace',
           children: []
+        },
+        { 
+          id: 'spawn1', 
+          name: 'SpawnPoint', 
+          type: 'actor', 
+          mesh: actor, 
+          visible: true, 
+          selectable: true,
+          parent: 'workspace',
+          children: [{
+            id: 'spawn1_config',
+            name: 'Config',
+            type: 'config',
+            content: getActorConfigContent(),
+            children: []
+          }]
         }
       );
     }
@@ -538,6 +578,31 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     }
   }, [tool, selectedObject]);
 
+  const getActorConfigContent = () => {
+    return `-- Actor Configuration
+-- This script configures the Actor's role and behavior
+
+inst actor = script.Parent
+
+-- Actor Role Configuration
+actor.Role = "SpawnPoint"  -- Options: "SpawnPoint", "NPC", "Collectible", "Trigger", "Enemy"
+
+-- Spawn Point Properties (when Role = "SpawnPoint")
+actor.SpawnPoint = {
+    IsDefault = true,        -- Is this the default spawn point?
+    Team = "All",           -- Which team can spawn here? ("All", "Red", "Blue", etc.)
+    RespawnTime = 0,        -- Delay before respawn (seconds)
+    MaxPlayers = 1          -- Max players that can spawn here simultaneously
+}
+
+-- Physical Properties
+actor.Collision = false     -- Set to false so players can pass through
+actor.Transparency = 0.5     -- Make it semi-transparent
+actor.Color = "Green"        -- Visual indicator color
+
+print("Actor configured as: " + actor.Role)`;
+  };
+
   const addMoveGizmos = (object: THREE.Object3D) => {
     const scene = sceneRef.current;
     if (!scene) return;
@@ -666,7 +731,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     };
 
     // Handle 3D objects
-    if (['part', 'sphere', 'cylinder'].includes(type)) {
+    if (['part', 'sphere', 'cylinder', 'actor'].includes(type)) {
       let geometry: THREE.BufferGeometry;
       let material: THREE.Material;
 
@@ -683,6 +748,14 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
           geometry = new THREE.CylinderGeometry(1, 1, 2, 32);
           material = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
           break;
+        case 'actor':
+          geometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
+          material = new THREE.MeshLambertMaterial({ 
+            color: 0x00FF00,
+            transparent: true,
+            opacity: 0.7
+          });
+          break;
         default:
           return;
       }
@@ -690,12 +763,34 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(
         (Math.random() - 0.5) * 10,
-        2,
+        type === 'actor' ? 0.1 : 2,
         (Math.random() - 0.5) * 10
       );
       mesh.castShadow = true;
       mesh.name = newObject.name;
       mesh.userData = { id, name: newObject.name, type, selectable: true };
+      
+      // Add glow effect for actors
+      if (type === 'actor') {
+        const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
+        const glowMaterial = new THREE.MeshBasicMaterial({ 
+          color: 0x00FF00,
+          transparent: true,
+          opacity: 0.3
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        mesh.add(glow);
+        
+        // Add default config for Actor
+        newObject.children = [{
+          id: `config_${Date.now()}`,
+          name: 'Config',
+          type: 'config',
+          children: [],
+          content: getActorConfigContent()
+        }];
+      }
+      
       sceneRef.current.add(mesh);
 
       newObject.mesh = mesh;
@@ -722,8 +817,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
   const getDefaultScriptContent = (type: string) => {
     switch (type) {
       case 'vscript':
-        return `// Server Script
-print("Server script loaded")
+        return `// Basic Script (Server)
+print("Basic script loaded")
 
 function onPlayerJoin(player)
     print("Player joined: " + player.name)
@@ -731,8 +826,8 @@ end
 
 game.onPlayerJoin(onPlayerJoin)`;
       case 'vlscript':
-        return `// Client Script
-print("Client script loaded")
+        return `// Home Script (Client)
+print("Home script loaded")
 
 inst player = game.Players.LocalPlayer
 
@@ -954,6 +1049,7 @@ print("Configuration loaded")`;
       'part': '🧱',
       'sphere': '⚪',
       'cylinder': '🥫',
+      'actor': '👤',
       'config': '⚙️',
       'model': '🏗️',
       'folder': '📁',
@@ -1030,6 +1126,7 @@ print("Configuration loaded")`;
             <div>Click objects to select</div>
             <div className="text-yellow-400">Drag gizmos to transform</div>
             <div className="text-green-400">Tool: {tool.charAt(0).toUpperCase() + tool.slice(1)}</div>
+            <div className="text-cyan-400">Green cylinders: Actor spawn points</div>
           </div>
         </div>
       </div>
@@ -1099,6 +1196,17 @@ print("Configuration loaded")`;
                         onChange={(e) => updateObjectProperty(selectedObject.id, 'position.z', parseFloat(e.target.value))}
                         className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                       />
+                    </div>
+                  </div>
+                )}
+                {selectedObject.type === 'actor' && (
+                  <div className="mt-3 p-3 bg-green-900/20 border border-green-400/20 rounded-lg">
+                    <h5 className="text-green-400 font-semibold text-sm mb-2">Actor Properties</h5>
+                    <div className="text-xs text-green-200 space-y-1">
+                      <div>• Role: Spawn Point</div>
+                      <div>• Collision: Disabled</div>
+                      <div>• Players spawn at this location</div>
+                      <div>• Edit Config to change role</div>
                     </div>
                   </div>
                 )}

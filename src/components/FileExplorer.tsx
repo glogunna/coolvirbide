@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { ChevronRight, ChevronDown, Folder, FileText, Database, Volume2, Image, Box, Monitor, Plus, MoreHorizontal, AlertTriangle, Settings, Search, Edit2, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FileText, Database, Volume2, Image, Box, Monitor, Plus, MoreHorizontal, AlertTriangle, Settings, Search, Edit2, Trash2, User } from 'lucide-react';
 
 interface FileExplorerProps {
   onFileSelect: (file: any) => void;
@@ -56,6 +56,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
     { id: 'vlscript', name: 'Home Script', icon: '📋', description: 'Client-side script (.vlscript)' },
     { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script (.vdata)' },
     { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller' },
+    { id: 'actor', name: 'Actor', icon: '👤', description: 'Interactive game actor with configurable role' },
     { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block' },
     { id: 'sphere', name: 'Sphere', icon: '⚪', description: '3D sphere' },
     { id: 'cylinder', name: 'Cylinder', icon: '🥫', description: '3D cylinder' },
@@ -90,7 +91,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
           },
           ...project.services.workspace.objects.map((obj: any) => ({
             ...obj,
-            icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : <Box className="w-4 h-4 text-indigo-400" />,
+            icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : 
+                  obj.type === 'actor' ? <User className="w-4 h-4 text-green-400" /> :
+                  <Box className="w-4 h-4 text-indigo-400" />,
             children: obj.children || []
           }))
         ]
@@ -228,8 +231,25 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
       type,
       icon: getIconForType(type),
       children: [],
-      content: getDefaultContent(type)
+      content: getDefaultContent(type),
+      ...(type === 'actor' && {
+        position: { x: 0, y: 1, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 }
+      })
     };
+
+    // Add default config for Actor
+    if (type === 'actor') {
+      newObject.children = [{
+        id: `config_${Date.now()}`,
+        name: 'Config',
+        type: 'config',
+        icon: <ScriptIcon type="config" />,
+        children: [],
+        content: getActorConfigContent()
+      }];
+    }
 
     // Find parent and add the new object
     const updatedServices = [...services];
@@ -251,6 +271,91 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
     }
 
     setShowAddMenu(false);
+  };
+
+  const getActorConfigContent = () => {
+    return `-- Actor Configuration
+-- This script configures the Actor's role and behavior
+
+inst actor = script.Parent
+
+-- Actor Role Configuration
+actor.Role = "SpawnPoint"  -- Options: "SpawnPoint", "NPC", "Collectible", "Trigger", "Enemy"
+
+-- Spawn Point Properties (when Role = "SpawnPoint")
+actor.SpawnPoint = {
+    IsDefault = true,        -- Is this the default spawn point?
+    Team = "All",           -- Which team can spawn here? ("All", "Red", "Blue", etc.)
+    RespawnTime = 0,        -- Delay before respawn (seconds)
+    MaxPlayers = 1          -- Max players that can spawn here simultaneously
+}
+
+-- Physical Properties
+actor.Collision = false     -- Set to false so players can pass through
+actor.Transparency = 0.5     -- Make it semi-transparent
+actor.Color = "Green"        -- Visual indicator color
+
+-- NPC Properties (when Role = "NPC")
+actor.NPC = {
+    Health = 100,
+    WalkSpeed = 8,
+    Dialogue = "Hello, welcome to the game!",
+    Hostile = false
+}
+
+-- Collectible Properties (when Role = "Collectible")
+actor.Collectible = {
+    Value = 10,             -- Points/coins awarded
+    RespawnTime = 30,       -- Time to respawn after collection
+    Sound = "CoinPickup"    -- Sound to play when collected
+}
+
+-- Trigger Properties (when Role = "Trigger")
+actor.Trigger = {
+    TriggerDistance = 5,    -- Distance to activate
+    OneTime = false,        -- Can only be triggered once?
+    Action = "OpenDoor"     -- What happens when triggered
+}
+
+-- Functions
+function actor.OnPlayerTouch(player)
+    if actor.Role == "SpawnPoint" then
+        -- Handle spawn point logic
+        print("Player " + player.Name + " touched spawn point")
+    elseif actor.Role == "Collectible" then
+        -- Handle collectible logic
+        player.Score = player.Score + actor.Collectible.Value
+        actor.Visible = false
+        -- Respawn after delay
+        wait(actor.Collectible.RespawnTime)
+        actor.Visible = true
+    elseif actor.Role == "Trigger" then
+        -- Handle trigger logic
+        print("Trigger activated by " + player.Name)
+        -- Execute trigger action
+    end
+end
+
+function actor.SetRole(newRole)
+    actor.Role = newRole
+    print("Actor role changed to: " + newRole)
+end
+
+function actor.GetSpawnPosition()
+    if actor.Role == "SpawnPoint" then
+        return actor.Position
+    end
+    return nil
+end
+
+-- Events
+actor.PlayerTouched = game.CreateEvent()
+actor.RoleChanged = game.CreateEvent()
+
+-- Connect events
+actor.OnTouch:Connect(actor.OnPlayerTouch)
+
+print("Actor configured as: " + actor.Role)`;
   };
 
   const moveObject = (sourceItem: any, targetParentPath: string[]) => {
@@ -299,6 +404,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
       'vlscript': <ScriptIcon type="home" />,
       'vdata': <ScriptIcon type="vdata" />,
       'ploid': <Box className="w-4 h-4 text-green-400" />,
+      'actor': <User className="w-4 h-4 text-green-400" />,
       'part': <Box className="w-4 h-4 text-blue-400" />,
       'sphere': <Box className="w-4 h-4 text-purple-400" />,
       'cylinder': <Box className="w-4 h-4 text-yellow-400" />,
@@ -353,6 +459,8 @@ parent.MaxHealth = 100
 parent.Speed = 16
 
 print("Configuration loaded")`;
+      case 'actor':
+        return null; // Actor content is handled by its config
       default:
         return null;
     }
@@ -654,6 +762,7 @@ print("Configuration loaded")`;
           <div>• <span className="text-yellow-300">.vdata</span> - Database scripts</div>
           <div>• <span className="text-blue-300">Config</span> - Configuration object</div>
           <div>• <span className="text-blue-300">Ploid</span> - Character controller</div>
+          <div>• <span className="text-green-300">Actor</span> - Interactive game object</div>
           <div>• <span className="text-purple-300">Drag & Drop</span> - Reparent objects</div>
         </div>
       </div>

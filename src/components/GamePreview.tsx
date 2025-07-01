@@ -23,6 +23,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   const [playerVelocity, setPlayerVelocity] = useState({ x: 0, y: 0, z: 0 });
   const [isGrounded, setIsGrounded] = useState(true);
   const [cameraAngle, setCameraAngle] = useState({ horizontal: 0, vertical: 0 });
+  const [spawnPoint, setSpawnPoint] = useState({ x: 0, y: 1, z: 0 });
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -43,6 +44,150 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       memory: project.type === 'game3d' ? '24.8MB' : project.type === 'game2d' ? '8.2MB' : '4.1MB'
     });
   }, [project]);
+
+  const findSpawnPoint = () => {
+    // Look for Actor objects with SpawnPoint role in the workspace
+    const findActorsRecursively = (objects: any[]): any[] => {
+      let actors: any[] = [];
+      for (const obj of objects) {
+        if (obj.type === 'actor') {
+          // Check if this actor has a config that defines it as a spawn point
+          const config = obj.children?.find((child: any) => child.type === 'config');
+          if (config && config.content && config.content.includes('Role = "SpawnPoint"')) {
+            actors.push(obj);
+          }
+        }
+        if (obj.children) {
+          actors = actors.concat(findActorsRecursively(obj.children));
+        }
+      }
+      return actors;
+    };
+
+    const workspaceObjects = project.services.workspace.objects || [];
+    const spawnActors = findActorsRecursively(workspaceObjects);
+    
+    if (spawnActors.length > 0) {
+      // Find default spawn point or use the first one
+      const defaultSpawn = spawnActors.find(actor => {
+        const config = actor.children?.find((child: any) => child.type === 'config');
+        return config && config.content && config.content.includes('IsDefault = true');
+      });
+      
+      const chosenSpawn = defaultSpawn || spawnActors[0];
+      return chosenSpawn.position || { x: 0, y: 1, z: 0 };
+    }
+    
+    return { x: 0, y: 1, z: 0 }; // Default spawn if no spawn point found
+  };
+
+  const loadWorkspaceObjects = (scene: THREE.Scene) => {
+    // Load objects from the actual workspace
+    const loadObjectsRecursively = (objects: any[], parent?: THREE.Object3D) => {
+      for (const obj of objects) {
+        let mesh: THREE.Mesh | THREE.Group | null = null;
+
+        switch (obj.type) {
+          case 'part':
+            const partGeometry = new THREE.BoxGeometry(2, 2, 2);
+            const partMaterial = new THREE.MeshLambertMaterial({ 
+              color: obj.color ? new THREE.Color(obj.color) : 0x4ECDC4 
+            });
+            mesh = new THREE.Mesh(partGeometry, partMaterial);
+            mesh.castShadow = true;
+            break;
+
+          case 'sphere':
+            const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+            const sphereMaterial = new THREE.MeshLambertMaterial({ 
+              color: obj.color ? new THREE.Color(obj.color) : 0xFFE66D 
+            });
+            mesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            mesh.castShadow = true;
+            break;
+
+          case 'cylinder':
+            const cylinderGeometry = new THREE.CylinderGeometry(1, 1, 2, 32);
+            const cylinderMaterial = new THREE.MeshLambertMaterial({ 
+              color: obj.color ? new THREE.Color(obj.color) : 0xFF6B6B 
+            });
+            mesh = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+            mesh.castShadow = true;
+            break;
+
+          case 'actor':
+            // Create visual representation for Actor (spawn point)
+            const config = obj.children?.find((child: any) => child.type === 'config');
+            const isSpawnPoint = config && config.content && config.content.includes('Role = "SpawnPoint"');
+            
+            if (isSpawnPoint) {
+              // Create a glowing cylinder for spawn point
+              const spawnGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
+              const spawnMaterial = new THREE.MeshLambertMaterial({ 
+                color: 0x00FF00,
+                transparent: true,
+                opacity: 0.7
+              });
+              mesh = new THREE.Mesh(spawnGeometry, spawnMaterial);
+              
+              // Add a glowing effect
+              const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
+              const glowMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0x00FF00,
+                transparent: true,
+                opacity: 0.3
+              });
+              const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+              mesh.add(glow);
+            } else {
+              // Generic actor representation
+              const actorGeometry = new THREE.BoxGeometry(1, 2, 1);
+              const actorMaterial = new THREE.MeshLambertMaterial({ color: 0x9B59B6 });
+              mesh = new THREE.Mesh(actorGeometry, actorMaterial);
+              mesh.castShadow = true;
+            }
+            break;
+
+          case 'model':
+          case 'folder':
+            // Create a group for containers
+            mesh = new THREE.Group();
+            break;
+        }
+
+        if (mesh) {
+          // Set position, rotation, scale from object properties
+          if (obj.position) {
+            mesh.position.set(obj.position.x || 0, obj.position.y || 0, obj.position.z || 0);
+          }
+          if (obj.rotation) {
+            mesh.rotation.set(obj.rotation.x || 0, obj.rotation.y || 0, obj.rotation.z || 0);
+          }
+          if (obj.scale) {
+            mesh.scale.set(obj.scale.x || 1, obj.scale.y || 1, obj.scale.z || 1);
+          }
+
+          mesh.name = obj.name;
+          mesh.userData = { id: obj.id, type: obj.type };
+
+          if (parent) {
+            parent.add(mesh);
+          } else {
+            scene.add(mesh);
+          }
+
+          // Recursively load children
+          if (obj.children && obj.children.length > 0) {
+            loadObjectsRecursively(obj.children, mesh);
+          }
+        }
+      }
+    };
+
+    // Load workspace objects
+    const workspaceObjects = project.services.workspace.objects || [];
+    loadObjectsRecursively(workspaceObjects);
+  };
 
   const init3DGame = () => {
     if (!mountRef.current) return;
@@ -94,29 +239,22 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     ground.receiveShadow = true;
     scene.add(ground);
 
+    // Load workspace objects from the project
+    loadWorkspaceObjects(scene);
+
+    // Find spawn point
+    const spawn = findSpawnPoint();
+    setSpawnPoint(spawn);
+    setPlayerPosition(spawn);
+
     // Create player character (cube)
     const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
     const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B6B });
     const player = new THREE.Mesh(playerGeometry, playerMaterial);
-    player.position.set(0, 1, 0);
+    player.position.set(spawn.x, spawn.y, spawn.z);
     player.castShadow = true;
     scene.add(player);
     playerRef.current = player;
-
-    // Add some environment objects
-    const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
-    const cubeMaterial = new THREE.MeshLambertMaterial({ color: 0x4ECDC4 });
-    const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    cube.position.set(5, 1, 0);
-    cube.castShadow = true;
-    scene.add(cube);
-
-    const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-    const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0xFFE66D });
-    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    sphere.position.set(-5, 1, 0);
-    sphere.castShadow = true;
-    scene.add(sphere);
 
     // Grid helper
     const gridHelper = new THREE.GridHelper(50, 50);
@@ -444,18 +582,19 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   };
 
   const resetGame = () => {
-    // Reset player position and camera
-    setPlayerPosition({ x: 0, y: 1, z: 0 });
+    // Reset player to spawn point
+    const spawn = findSpawnPoint();
+    setPlayerPosition(spawn);
     setPlayerVelocity({ x: 0, y: 0, z: 0 });
     setCameraAngle({ horizontal: 0, vertical: 0 });
     setIsGrounded(true);
     
     if (playerRef.current) {
-      playerRef.current.position.set(0, 1, 0);
+      playerRef.current.position.set(spawn.x, spawn.y, spawn.z);
     }
     
     if (cameraRef.current) {
-      cameraRef.current.position.set(0, 5, 10);
+      cameraRef.current.position.set(spawn.x, spawn.y + 5, spawn.z + 10);
     }
   };
 
@@ -482,7 +621,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           <button
             onClick={resetGame}
             className="p-2 hover:bg-gray-700 rounded transition-colors"
-            title="Reset"
+            title="Reset to Spawn"
           >
             <RotateCcw className="w-4 h-4 text-gray-400" />
           </button>
@@ -521,6 +660,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
                   <div>Mouse Drag: Rotate Camera</div>
                   <div>Space: Jump</div>
                   <div className="text-yellow-400">Player: Red Cube</div>
+                  <div className="text-green-400">Spawn: ({spawnPoint.x}, {spawnPoint.y}, {spawnPoint.z})</div>
                 </>
               )}
               {project.type === 'game2d' && (
@@ -549,6 +689,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
               <>
                 <div>Player: ({playerPosition.x.toFixed(1)}, {playerPosition.y.toFixed(1)}, {playerPosition.z.toFixed(1)})</div>
                 <div>Grounded: {isGrounded ? 'Yes' : 'No'}</div>
+                <div className="text-green-400">Workspace Loaded</div>
               </>
             )}
           </div>
@@ -560,13 +701,14 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         <div className="text-sm font-mono text-gray-300 space-y-1">
           <div className="text-green-400">[INFO] Game initialized successfully</div>
           <div className="text-blue-400">[DEBUG] Loading {project.type} environment...</div>
-          <div className="text-green-400">[INFO] All assets loaded</div>
+          <div className="text-green-400">[INFO] Workspace objects loaded from project</div>
           {project.type === 'game3d' && (
             <>
               <div className="text-blue-400">[DEBUG] 3D scene created with THREE.js</div>
-              <div className="text-green-400">[INFO] Player character spawned (Red Cube)</div>
+              <div className="text-green-400">[INFO] Player spawned at Actor spawn point ({spawnPoint.x}, {spawnPoint.y}, {spawnPoint.z})</div>
               <div className="text-blue-400">[DEBUG] Physics engine initialized</div>
               <div className="text-yellow-400">[INFO] Controls: WASD/Arrows=Move, Mouse=Camera, Space=Jump</div>
+              <div className="text-cyan-400">[INFO] Actor system loaded - Spawn points active</div>
             </>
           )}
           {project.type === 'game2d' && (

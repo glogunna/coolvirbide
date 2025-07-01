@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { RotateCcw, Move, RotateCw, Scale, Trash2, Plus, Eye, EyeOff } from 'lucide-react';
+import { RotateCcw, Move, RotateCw, Scale, Trash2, Plus, Eye, EyeOff, Search, Edit2 } from 'lucide-react';
 import * as THREE from 'three';
 
 interface WorkspaceEditorProps {
@@ -19,6 +19,32 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
   const [keys, setKeys] = useState<Set<string>>(new Set());
   const [isDraggingGizmo, setIsDraggingGizmo] = useState(false);
   const [dragStartPosition, setDragStartPosition] = useState<THREE.Vector3 | null>(null);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [addMenuPosition, setAddMenuPosition] = useState({ x: 0, y: 0 });
+  const [addMenuParent, setAddMenuParent] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingName, setEditingName] = useState<string | null>(null);
+
+  const objectTypes = [
+    { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties' },
+    { id: 'model', name: 'Model', icon: '🏗️', description: 'Container for 3D objects' },
+    { id: 'folder', name: 'Folder', icon: '📁', description: 'Organize objects in folders' },
+    { id: 'vscript', name: 'Server Script', icon: '📜', description: 'Server-side script' },
+    { id: 'vlscript', name: 'Client Script', icon: '📋', description: 'Client-side script' },
+    { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script' },
+    { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller' },
+    { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block' },
+    { id: 'sphere', name: 'Sphere', icon: '⚪', description: '3D sphere' },
+    { id: 'cylinder', name: 'Cylinder', icon: '🥫', description: '3D cylinder' },
+    { id: 'image', name: 'Image/Texture', icon: '🖼️', description: 'Image or texture file' },
+    { id: 'sound', name: 'Sound', icon: '🔊', description: 'Audio file' },
+    { id: 'video', name: 'Video', icon: '🎬', description: 'Video file' }
+  ];
+
+  const filteredObjectTypes = objectTypes.filter(type => 
+    type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    type.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -67,12 +93,21 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     baseplate.position.y = -0.5;
     baseplate.receiveShadow = true;
     baseplate.name = 'Baseplate';
-    baseplate.userData = { id: 'baseplate', name: 'Baseplate', type: '3dobject', selectable: false };
+    baseplate.userData = { id: 'baseplate', name: 'Baseplate', type: 'part', selectable: true };
     scene.add(baseplate);
 
-    // Initialize objects array
+    // Initialize objects array with hierarchy structure
     const initialObjects = [
-      { id: 'baseplate', name: 'Baseplate', type: '3dobject', mesh: baseplate, visible: true, selectable: false }
+      { 
+        id: 'baseplate', 
+        name: 'Baseplate', 
+        type: 'part', 
+        mesh: baseplate, 
+        visible: true, 
+        selectable: true,
+        parent: 'workspace',
+        children: []
+      }
     ];
 
     // Add some example objects if it's a game project
@@ -84,7 +119,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       cube.position.set(0, 1, 0);
       cube.castShadow = true;
       cube.name = 'Part';
-      cube.userData = { id: 'part1', name: 'Part', type: '3dobject', selectable: true };
+      cube.userData = { id: 'part1', name: 'Part', type: 'part', selectable: true };
       scene.add(cube);
 
       // Add a sphere
@@ -94,12 +129,30 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       sphere.position.set(5, 1, 0);
       sphere.castShadow = true;
       sphere.name = 'Ball';
-      sphere.userData = { id: 'ball1', name: 'Ball', type: '3dobject', selectable: true };
+      sphere.userData = { id: 'ball1', name: 'Ball', type: 'sphere', selectable: true };
       scene.add(sphere);
 
       initialObjects.push(
-        { id: 'part1', name: 'Part', type: '3dobject', mesh: cube, visible: true, selectable: true },
-        { id: 'ball1', name: 'Ball', type: '3dobject', mesh: sphere, visible: true, selectable: true }
+        { 
+          id: 'part1', 
+          name: 'Part', 
+          type: 'part', 
+          mesh: cube, 
+          visible: true, 
+          selectable: true,
+          parent: 'workspace',
+          children: []
+        },
+        { 
+          id: 'ball1', 
+          name: 'Ball', 
+          type: 'sphere', 
+          mesh: sphere, 
+          visible: true, 
+          selectable: true,
+          parent: 'workspace',
+          children: []
+        }
       );
     }
 
@@ -113,6 +166,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     // Mouse controls
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
+    let dragPlane: THREE.Plane | null = null;
+    let dragOffset = new THREE.Vector3();
 
     const onMouseDown = (event: MouseEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -122,18 +177,37 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       raycaster.setFromCamera(mouse, camera);
       
       // Check for gizmo interaction first
-      const gizmos = scene.children.filter(obj => obj.name.includes('gizmo'));
+      const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
       const gizmoIntersects = raycaster.intersectObjects(gizmos);
       
       if (gizmoIntersects.length > 0 && selectedObject) {
         // Start gizmo interaction
         setIsDraggingGizmo(true);
-        setDragStartPosition(selectedObject.mesh.position.clone());
+        
+        // Create drag plane based on gizmo axis
+        const gizmo = gizmoIntersects[0].object;
+        const axis = gizmo.userData.axis;
+        
+        if (axis === 'x') {
+          dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        } else if (axis === 'y') {
+          dragPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+        } else if (axis === 'z') {
+          dragPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+        }
+        
+        // Calculate offset from object center to mouse position
+        const intersection = new THREE.Vector3();
+        if (dragPlane) {
+          raycaster.ray.intersectPlane(dragPlane, intersection);
+          dragOffset.subVectors(selectedObject.mesh.position, intersection);
+        }
+        
         return;
       }
 
       // Check for object selection
-      const selectableObjects = scene.children.filter(obj => obj.userData.selectable);
+      const selectableObjects = scene.children.filter(obj => obj.userData.selectable && !obj.userData.isGizmo);
       const intersects = raycaster.intersectObjects(selectableObjects);
 
       if (intersects.length > 0) {
@@ -152,23 +226,23 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     };
 
     const onMouseMove = (event: MouseEvent) => {
-      if (isDraggingGizmo && selectedObject) {
-        // Handle gizmo dragging
+      if (isDraggingGizmo && selectedObject && dragPlane) {
+        // Handle gizmo dragging with proper plane intersection
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
         
-        // Create a plane for intersection
-        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
         const intersection = new THREE.Vector3();
-        raycaster.ray.intersectPlane(plane, intersection);
-
-        if (tool === 'move') {
-          selectedObject.mesh.position.copy(intersection);
-          selectedObject.mesh.position.y = Math.max(selectedObject.mesh.position.y, 1);
-          updateGizmoPositions(selectedObject.mesh);
+        if (raycaster.ray.intersectPlane(dragPlane, intersection)) {
+          const newPosition = intersection.add(dragOffset);
+          
+          if (tool === 'move') {
+            selectedObject.mesh.position.copy(newPosition);
+            selectedObject.mesh.position.y = Math.max(selectedObject.mesh.position.y, 0.5);
+            updateGizmoPositions(selectedObject.mesh);
+          }
         }
         return;
       }
@@ -196,7 +270,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     const onMouseUp = () => {
       isDragging = false;
       setIsDraggingGizmo(false);
-      setDragStartPosition(null);
+      dragPlane = null;
+      dragOffset.set(0, 0, 0);
     };
 
     const highlightObject = (object: THREE.Object3D) => {
@@ -225,14 +300,16 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       const outlines = scene.children.filter(obj => obj.name === 'outline');
       outlines.forEach(outline => scene.remove(outline));
       
-      const gizmos = scene.children.filter(obj => obj.name.includes('gizmo'));
+      const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
       gizmos.forEach(gizmo => scene.remove(gizmo));
     };
 
     const updateGizmoPositions = (object: THREE.Object3D) => {
-      const gizmos = scene.children.filter(obj => obj.name.includes('gizmo'));
+      const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
       gizmos.forEach(gizmo => {
-        gizmo.position.copy(object.position);
+        const basePosition = object.position.clone();
+        gizmo.position.copy(basePosition);
+        
         if (gizmo.name.includes('x')) gizmo.position.x += 2;
         if (gizmo.name.includes('y')) gizmo.position.y += 2;
         if (gizmo.name.includes('z')) gizmo.position.z += 2;
@@ -435,11 +512,6 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         camera.position.addScaledVector(right, moveSpeed);
         moved = true;
       }
-      
-      if (moved) {
-        // Don't reset lookAt when moving with WASD
-        // This allows free camera movement
-      }
     };
 
     const animationId = setInterval(moveCamera, 16); // ~60fps
@@ -448,21 +520,20 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
 
   // Update gizmos when tool changes
   useEffect(() => {
-    if (selectedObject && selectedObject.mesh) {
+    if (selectedObject && selectedObject.mesh && sceneRef.current) {
       const scene = sceneRef.current;
-      if (scene) {
-        // Clear existing gizmos
-        const gizmos = scene.children.filter(obj => obj.name.includes('gizmo'));
-        gizmos.forEach(gizmo => scene.remove(gizmo));
-        
-        // Add new gizmos based on current tool
-        if (tool === 'move') {
-          addMoveGizmos(selectedObject.mesh);
-        } else if (tool === 'rotate') {
-          addRotateGizmos(selectedObject.mesh);
-        } else if (tool === 'scale') {
-          addScaleGizmos(selectedObject.mesh);
-        }
+      
+      // Clear existing gizmos
+      const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
+      gizmos.forEach(gizmo => scene.remove(gizmo));
+      
+      // Add new gizmos based on current tool
+      if (tool === 'move') {
+        addMoveGizmos(selectedObject.mesh);
+      } else if (tool === 'rotate') {
+        addRotateGizmos(selectedObject.mesh);
+      } else if (tool === 'scale') {
+        addScaleGizmos(selectedObject.mesh);
       }
     }
   }, [tool, selectedObject]);
@@ -580,64 +651,151 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     scene.add(zCube);
   };
 
-  const addObject = (type: string) => {
+  const addObject = (type: string, parentId?: string) => {
     if (!sceneRef.current) return;
 
-    let geometry: THREE.BufferGeometry;
-    let material: THREE.Material;
-    let name: string;
+    const id = `${type}_${Date.now()}`;
+    let newObject: any = {
+      id,
+      name: type.charAt(0).toUpperCase() + type.slice(1),
+      type,
+      visible: true,
+      selectable: false,
+      parent: parentId || 'workspace',
+      children: []
+    };
 
-    switch (type) {
-      case 'cube':
-        geometry = new THREE.BoxGeometry(2, 2, 2);
-        material = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
-        name = 'Part';
-        break;
-      case 'sphere':
-        geometry = new THREE.SphereGeometry(1, 32, 32);
-        material = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
-        name = 'Ball';
-        break;
-      case 'cylinder':
-        geometry = new THREE.CylinderGeometry(1, 1, 2, 32);
-        material = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
-        name = 'Cylinder';
-        break;
-      default:
-        return;
+    // Handle 3D objects
+    if (['part', 'sphere', 'cylinder'].includes(type)) {
+      let geometry: THREE.BufferGeometry;
+      let material: THREE.Material;
+
+      switch (type) {
+        case 'part':
+          geometry = new THREE.BoxGeometry(2, 2, 2);
+          material = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
+          break;
+        case 'sphere':
+          geometry = new THREE.SphereGeometry(1, 32, 32);
+          material = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
+          break;
+        case 'cylinder':
+          geometry = new THREE.CylinderGeometry(1, 1, 2, 32);
+          material = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
+          break;
+        default:
+          return;
+      }
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(
+        (Math.random() - 0.5) * 10,
+        2,
+        (Math.random() - 0.5) * 10
+      );
+      mesh.castShadow = true;
+      mesh.name = newObject.name;
+      mesh.userData = { id, name: newObject.name, type, selectable: true };
+      sceneRef.current.add(mesh);
+
+      newObject.mesh = mesh;
+      newObject.selectable = true;
     }
 
-    const mesh = new THREE.Mesh(geometry, material);
-    const id = `${type}_${Date.now()}`;
-    mesh.position.set(
-      (Math.random() - 0.5) * 10,
-      2,
-      (Math.random() - 0.5) * 10
-    );
-    mesh.castShadow = true;
-    mesh.name = name;
-    mesh.userData = { id, name, type: '3dobject', selectable: true };
-    sceneRef.current.add(mesh);
+    // Handle script objects
+    if (['vscript', 'vlscript', 'vdata', 'config'].includes(type)) {
+      newObject.content = getDefaultScriptContent(type);
+    }
 
-    const newObject = { id, name, type: '3dobject', mesh, visible: true, selectable: true };
+    // Add to parent's children array
+    if (parentId) {
+      const parent = objects.find(obj => obj.id === parentId);
+      if (parent) {
+        parent.children.push(newObject);
+      }
+    }
+
     setObjects(prev => [...prev, newObject]);
+    setShowAddMenu(false);
+  };
+
+  const getDefaultScriptContent = (type: string) => {
+    switch (type) {
+      case 'vscript':
+        return `// Server Script
+print("Server script loaded")
+
+function onPlayerJoin(player)
+    print("Player joined: " + player.name)
+end
+
+game.onPlayerJoin(onPlayerJoin)`;
+      case 'vlscript':
+        return `// Client Script
+print("Client script loaded")
+
+inst player = game.Players.LocalPlayer
+
+function onKeyPress(key)
+    print("Key pressed: " + key)
+end
+
+game.InputService.onKeyPress(onKeyPress)`;
+      case 'vdata':
+        return `-- Database Script
+CREATE TABLE IF NOT EXISTS data (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    value TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+function getData(id)
+    SELECT * FROM data WHERE id = id;
+end`;
+      case 'config':
+        return `-- Configuration
+inst parent = script.Parent
+
+parent.Health = 100
+parent.MaxHealth = 100
+parent.Speed = 16
+
+print("Configuration loaded")`;
+      default:
+        return '// New script';
+    }
   };
 
   const deleteObject = (id: string) => {
     if (id === 'baseplate') return;
     
     const objectToDelete = objects.find(obj => obj.id === id);
-    if (objectToDelete && sceneRef.current) {
-      sceneRef.current.remove(objectToDelete.mesh);
+    if (objectToDelete) {
+      // Remove from 3D scene if it has a mesh
+      if (objectToDelete.mesh && sceneRef.current) {
+        sceneRef.current.remove(objectToDelete.mesh);
+      }
+      
+      // Remove from parent's children array
+      const parent = objects.find(obj => obj.children.some((child: any) => child.id === id));
+      if (parent) {
+        parent.children = parent.children.filter((child: any) => child.id !== id);
+      }
+      
+      // Remove from objects array
       setObjects(prev => prev.filter(obj => obj.id !== id));
+      
       if (selectedObject?.id === id) {
         setSelectedObject(null);
         // Clear highlights when deleting selected object
-        const scene = sceneRef.current;
-        const outlines = scene.children.filter(obj => obj.name === 'outline');
-        outlines.forEach(outline => scene.remove(outline));
-        const gizmos = scene.children.filter(obj => obj.name.includes('gizmo'));
-        gizmos.forEach(gizmo => scene.remove(gizmo));
+        if (sceneRef.current) {
+          const scene = sceneRef.current;
+          const outlines = scene.children.filter(obj => obj.name === 'outline');
+          outlines.forEach(outline => scene.remove(outline));
+          const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
+          gizmos.forEach(gizmo => scene.remove(gizmo));
+        }
       }
     }
   };
@@ -646,7 +804,9 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     const obj = objects.find(o => o.id === id);
     if (obj) {
       obj.visible = !obj.visible;
-      obj.mesh.visible = obj.visible;
+      if (obj.mesh) {
+        obj.mesh.visible = obj.visible;
+      }
       setObjects([...objects]);
     }
   };
@@ -659,28 +819,32 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
 
   const updateObjectProperty = (id: string, property: string, value: any) => {
     const obj = objects.find(o => o.id === id);
-    if (obj && obj.mesh) {
+    if (obj) {
       if (property === 'name') {
         obj.name = value;
-        obj.mesh.name = value;
-        obj.mesh.userData.name = value;
+        if (obj.mesh) {
+          obj.mesh.name = value;
+          obj.mesh.userData.name = value;
+        }
       } else if (property.startsWith('position.')) {
         const axis = property.split('.')[1];
-        obj.mesh.position[axis as 'x' | 'y' | 'z'] = value;
-        
-        // Update gizmos position if this object is selected
-        if (selectedObject?.id === id && sceneRef.current) {
-          const gizmos = sceneRef.current.children.filter(child => child.name.includes('gizmo'));
-          gizmos.forEach(gizmo => {
-            gizmo.position.copy(obj.mesh.position);
-            if (gizmo.name.includes('x')) gizmo.position.x += 2;
-            if (gizmo.name.includes('y')) gizmo.position.y += 2;
-            if (gizmo.name.includes('z')) gizmo.position.z += 2;
-          });
+        if (obj.mesh) {
+          obj.mesh.position[axis as 'x' | 'y' | 'z'] = value;
           
-          // Update outline position
-          const outlines = sceneRef.current.children.filter(child => child.name === 'outline');
-          outlines.forEach(outline => outline.position.copy(obj.mesh.position));
+          // Update gizmos position if this object is selected
+          if (selectedObject?.id === id && sceneRef.current) {
+            const gizmos = sceneRef.current.children.filter(child => child.userData.isGizmo);
+            gizmos.forEach(gizmo => {
+              gizmo.position.copy(obj.mesh.position);
+              if (gizmo.name.includes('x')) gizmo.position.x += 2;
+              if (gizmo.name.includes('y')) gizmo.position.y += 2;
+              if (gizmo.name.includes('z')) gizmo.position.z += 2;
+            });
+            
+            // Update outline position
+            const outlines = sceneRef.current.children.filter(child => child.name === 'outline');
+            outlines.forEach(outline => outline.position.copy(obj.mesh.position));
+          }
         }
       }
       setObjects([...objects]);
@@ -689,6 +853,123 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       }
     }
   };
+
+  const handleAddButtonClick = (event: React.MouseEvent, parentId?: string) => {
+    event.stopPropagation();
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    setAddMenuPosition({ x: rect.right + 10, y: rect.top });
+    setAddMenuParent(parentId ? objects.find(obj => obj.id === parentId) : null);
+    setShowAddMenu(true);
+    setSearchTerm('');
+  };
+
+  const renderObjectHierarchy = (obj: any, depth = 0) => {
+    const hasChildren = obj.children && obj.children.length > 0;
+    const isSelected = selectedObject?.id === obj.id;
+
+    return (
+      <div key={obj.id}>
+        <div
+          className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors group ${
+            isSelected ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
+          }`}
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          onClick={() => obj.selectable && setSelectedObject(obj)}
+          onMouseEnter={(e) => {
+            if (!obj.addButton) {
+              obj.addButton = true;
+              setObjects([...objects]);
+            }
+          }}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="text-lg">{getObjectIcon(obj.type)}</span>
+            {editingName === obj.id ? (
+              <input
+                type="text"
+                value={obj.name}
+                onChange={(e) => updateObjectProperty(obj.id, 'name', e.target.value)}
+                onBlur={() => setEditingName(null)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') setEditingName(null);
+                }}
+                className="flex-1 px-1 py-0.5 bg-gray-600 border border-gray-500 rounded text-white text-sm"
+                autoFocus
+              />
+            ) : (
+              <span className="text-sm text-white truncate">{obj.name}</span>
+            )}
+          </div>
+          
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={(e) => handleAddButtonClick(e, obj.id)}
+              className="p-1 hover:bg-gray-500 rounded"
+              title="Add Object"
+            >
+              <Plus className="w-3 h-3 text-gray-400" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingName(obj.id);
+              }}
+              className="p-1 hover:bg-gray-500 rounded"
+              title="Rename"
+            >
+              <Edit2 className="w-3 h-3 text-gray-400" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleVisibility(obj.id);
+              }}
+              className="p-1 hover:bg-gray-500 rounded"
+              title="Toggle Visibility"
+            >
+              {obj.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+            </button>
+            {obj.id !== 'baseplate' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteObject(obj.id);
+                }}
+                className="p-1 hover:bg-red-600 rounded"
+                title="Delete"
+              >
+                <Trash2 className="w-3 h-3 text-gray-400" />
+              </button>
+            )}
+          </div>
+        </div>
+        
+        {hasChildren && obj.children.map((child: any) => renderObjectHierarchy(child, depth + 1))}
+      </div>
+    );
+  };
+
+  const getObjectIcon = (type: string) => {
+    const iconMap: { [key: string]: string } = {
+      'part': '🧱',
+      'sphere': '⚪',
+      'cylinder': '🥫',
+      'config': '⚙️',
+      'model': '🏗️',
+      'folder': '📁',
+      'vscript': '📜',
+      'vlscript': '📋',
+      'vdata': '🗄️',
+      'ploid': '🤖',
+      'image': '🖼️',
+      'sound': '🔊',
+      'video': '🎬'
+    };
+    return iconMap[type] || '📄';
+  };
+
+  // Get root objects (those with parent 'workspace' or no parent)
+  const rootObjects = objects.filter(obj => obj.parent === 'workspace' || !obj.parent);
 
   return (
     <div className="flex-1 flex">
@@ -729,26 +1010,12 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
 
         {/* Add Objects Menu */}
         <div className="absolute top-4 right-4 z-10 bg-gray-800 rounded-lg p-2">
-          <div className="flex gap-2">
-            <button
-              onClick={() => addObject('cube')}
-              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm transition-colors"
-            >
-              + Cube
-            </button>
-            <button
-              onClick={() => addObject('sphere')}
-              className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded text-sm transition-colors"
-            >
-              + Sphere
-            </button>
-            <button
-              onClick={() => addObject('cylinder')}
-              className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm transition-colors"
-            >
-              + Cylinder
-            </button>
-          </div>
+          <button
+            onClick={(e) => handleAddButtonClick(e)}
+            className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded text-sm transition-colors"
+          >
+            + Add Object
+          </button>
         </div>
 
         {/* 3D Canvas */}
@@ -773,41 +1040,18 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         
         <div className="space-y-4">
           <div>
-            <h4 className="text-md font-semibold text-white mb-2">Scene Objects ({objects.length})</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-md font-semibold text-white">Scene Objects ({objects.length})</h4>
+              <button
+                onClick={(e) => handleAddButtonClick(e)}
+                className="p-1 bg-green-600 hover:bg-green-700 rounded"
+                title="Add Object"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            </div>
             <div className="space-y-1 max-h-64 overflow-y-auto">
-              {objects.map((obj) => (
-                <div
-                  key={obj.id}
-                  className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
-                    selectedObject?.id === obj.id ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
-                  }`}
-                  onClick={() => setSelectedObject(obj)}
-                >
-                  <span className="text-sm text-white">{obj.name}</span>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleVisibility(obj.id);
-                      }}
-                      className="p-1 hover:bg-gray-600 rounded"
-                    >
-                      {obj.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                    </button>
-                    {obj.id !== 'baseplate' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteObject(obj.id);
-                        }}
-                        className="p-1 hover:bg-red-600 rounded"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+              {rootObjects.map((obj) => renderObjectHierarchy(obj))}
             </div>
           </div>
 
@@ -824,38 +1068,40 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
                     className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="block text-sm text-gray-300 mb-1">X</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={selectedObject.mesh?.position.x.toFixed(1) || 0}
-                      onChange={(e) => updateObjectProperty(selectedObject.id, 'position.x', parseFloat(e.target.value))}
-                      className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                    />
+                {selectedObject.mesh && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">X</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={selectedObject.mesh?.position.x.toFixed(1) || 0}
+                        onChange={(e) => updateObjectProperty(selectedObject.id, 'position.x', parseFloat(e.target.value))}
+                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Y</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={selectedObject.mesh?.position.y.toFixed(1) || 0}
+                        onChange={(e) => updateObjectProperty(selectedObject.id, 'position.y', parseFloat(e.target.value))}
+                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Z</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={selectedObject.mesh?.position.z.toFixed(1) || 0}
+                        onChange={(e) => updateObjectProperty(selectedObject.id, 'position.z', parseFloat(e.target.value))}
+                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm text-gray-300 mb-1">Y</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={selectedObject.mesh?.position.y.toFixed(1) || 0}
-                      onChange={(e) => updateObjectProperty(selectedObject.id, 'position.y', parseFloat(e.target.value))}
-                      className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-300 mb-1">Z</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={selectedObject.mesh?.position.z.toFixed(1) || 0}
-                      onChange={(e) => updateObjectProperty(selectedObject.id, 'position.z', parseFloat(e.target.value))}
-                      className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -889,6 +1135,57 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
           </div>
         </div>
       </div>
+
+      {/* Add Object Menu */}
+      {showAddMenu && (
+        <>
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setShowAddMenu(false)}
+          />
+          <div 
+            className="fixed z-50 bg-gray-800 border border-gray-600 rounded-lg shadow-lg p-4 w-80"
+            style={{ 
+              left: addMenuPosition.x, 
+              top: addMenuPosition.y,
+              maxHeight: '400px',
+              overflowY: 'auto'
+            }}
+          >
+            <div className="mb-3">
+              <h3 className="text-white font-semibold mb-2">
+                Add Object {addMenuParent && `to ${addMenuParent.name}`}
+              </h3>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search objects..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:border-green-400 focus:outline-none"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-1">
+              {filteredObjectTypes.map((type) => (
+                <button
+                  key={type.id}
+                  onClick={() => addObject(type.id, addMenuParent?.id)}
+                  className="w-full flex items-center gap-3 p-3 bg-gray-700 hover:bg-gray-600 rounded transition-colors text-left"
+                >
+                  <span className="text-lg">{type.icon}</span>
+                  <div className="flex-1">
+                    <div className="text-white font-medium">{type.name}</div>
+                    <div className="text-gray-400 text-xs">{type.description}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

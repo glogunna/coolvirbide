@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ChevronRight, ChevronDown, Folder, FileText, Database, Volume2, Image, Box, Monitor, Plus, MoreHorizontal, AlertTriangle, Settings, Search, Edit2, Trash2 } from 'lucide-react';
 
 interface FileExplorerProps {
@@ -35,8 +35,18 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
   const [addMenuParent, setAddMenuParent] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingName, setEditingName] = useState<string | null>(null);
+  const [draggedItem, setDraggedItem] = useState<any>(null);
+  const [dragOverItem, setDragOverItem] = useState<string | null>(null);
+  const dragCounter = useRef(0);
 
   const hasThreeDStorage = installedPlugins.some(plugin => plugin.name === 'THREEDStorage');
+
+  // Protected items that cannot be deleted or renamed
+  const protectedItems = new Set([
+    'workspace', 'replicatedStorage', 'serverStorage', 'soundService', 
+    'mediaService', 'uiService', 'threedStorage', 'replicatedFirst',
+    'workspace-view', 'baseplate'
+  ]);
 
   function buildServicesFromProject() {
     const services = [
@@ -237,6 +247,43 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
     setShowAddMenu(false);
   };
 
+  const moveObject = (sourceItem: any, targetParentPath: string[]) => {
+    const updatedServices = [...services];
+    
+    // Remove from source
+    const removeFromParent = (items: any[], itemId: string): boolean => {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].id === itemId) {
+          items.splice(i, 1);
+          return true;
+        }
+        if (items[i].children && removeFromParent(items[i].children, itemId)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    removeFromParent(updatedServices, sourceItem.id);
+
+    // Add to target
+    let targetParent: any = updatedServices;
+    for (let i = 0; i < targetParentPath.length; i++) {
+      const pathSegment = targetParentPath[i];
+      if (i === 0) {
+        targetParent = targetParent.find((service: any) => service.id === pathSegment);
+      } else {
+        targetParent = targetParent.children.find((child: any) => child.id === pathSegment);
+      }
+    }
+
+    if (targetParent) {
+      if (!targetParent.children) targetParent.children = [];
+      targetParent.children.push(sourceItem);
+      setServices(updatedServices);
+    }
+  };
+
   const getIconForType = (type: string) => {
     const iconMap: { [key: string]: JSX.Element } = {
       'config': <ScriptIcon type="config" />,
@@ -306,10 +353,15 @@ print("Configuration loaded")`;
   };
 
   const deleteObject = (objectPath: string[]) => {
+    const objectId = objectPath[objectPath.length - 1];
+    
+    // Check if object is protected
+    if (protectedItems.has(objectId)) {
+      return;
+    }
+
     const updatedServices = [...services];
     let current: any = updatedServices;
-    let parent: any = null;
-    let objectIndex = -1;
 
     // Navigate to the object's parent
     for (let i = 0; i < objectPath.length - 1; i++) {
@@ -324,7 +376,7 @@ print("Configuration loaded")`;
     // Find the object in its parent's children
     if (current && current.children) {
       const lastSegment = objectPath[objectPath.length - 1];
-      objectIndex = current.children.findIndex((child: any) => child.id === lastSegment);
+      const objectIndex = current.children.findIndex((child: any) => child.id === lastSegment);
       if (objectIndex !== -1) {
         current.children.splice(objectIndex, 1);
         setServices(updatedServices);
@@ -333,6 +385,13 @@ print("Configuration loaded")`;
   };
 
   const renameObject = (objectPath: string[], newName: string) => {
+    const objectId = objectPath[objectPath.length - 1];
+    
+    // Check if object is protected
+    if (protectedItems.has(objectId)) {
+      return;
+    }
+
     const updatedServices = [...services];
     let current: any = updatedServices;
 
@@ -387,20 +446,98 @@ print("Configuration loaded")`;
     setSearchTerm('');
   };
 
+  const canAcceptDrop = (targetItem: any, sourceItem: any) => {
+    // Can't drop on self or children
+    if (targetItem.id === sourceItem.id) return false;
+    
+    // Check if target can have children
+    const canHaveChildren = ['workspace', 'replicatedStorage', 'serverStorage', 'folder', 'model', 'ploid', 'soundService', 'mediaService', 'uiService', 'threedStorage', 'replicatedFirst'].includes(targetItem.id) || 
+                           targetItem.type === 'folder' || targetItem.type === 'model' || targetItem.type === 'ploid';
+    
+    if (!canHaveChildren) return false;
+
+    // Check if source type is allowed in target
+    const sourceType = sourceItem.type;
+    const targetType = targetItem.id || targetItem.type;
+    
+    const allowedParents = objectTypes.find(type => type.id === sourceType)?.allowedParents || [];
+    return allowedParents.includes(targetType) || (allowedParents.includes('folder') && targetType === 'folder');
+  };
+
+  const handleDragStart = (e: React.DragEvent, item: any, path: string[]) => {
+    // Don't allow dragging protected items
+    if (protectedItems.has(item.id)) {
+      e.preventDefault();
+      return;
+    }
+
+    setDraggedItem({ item, path });
+    e.dataTransfer.effectAllowed = 'move';
+    dragCounter.current = 0;
+  };
+
+  const handleDragOver = (e: React.DragEvent, item: any, path: string[]) => {
+    if (!draggedItem || !canAcceptDrop(item, draggedItem.item)) {
+      return;
+    }
+    
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverItem(item.id);
+  };
+
+  const handleDragEnter = (e: React.DragEvent, item: any) => {
+    if (!draggedItem || !canAcceptDrop(item, draggedItem.item)) {
+      return;
+    }
+    
+    dragCounter.current++;
+    setDragOverItem(item.id);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setDragOverItem(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetItem: any, targetPath: string[]) => {
+    e.preventDefault();
+    
+    if (!draggedItem || !canAcceptDrop(targetItem, draggedItem.item)) {
+      return;
+    }
+
+    moveObject(draggedItem.item, targetPath);
+    setDraggedItem(null);
+    setDragOverItem(null);
+    dragCounter.current = 0;
+  };
+
   const renderTreeItem = (item: any, depth = 0, path: string[] = []) => {
     const currentPath = [...path, item.id];
     const isExpanded = expandedFolders.has(item.id);
     const hasChildren = item.children && item.children.length > 0;
     const isSelected = currentFile?.id === item.id;
     const canHaveChildren = ['workspace', 'replicatedStorage', 'serverStorage', 'folder', 'model', 'ploid', 'soundService', 'mediaService', 'uiService', 'threedStorage', 'replicatedFirst'].includes(item.id) || item.type === 'folder' || item.type === 'model' || item.type === 'ploid';
+    const isProtected = protectedItems.has(item.id);
+    const isDragOver = dragOverItem === item.id;
+    const canDrag = !isProtected;
 
     return (
       <div key={item.id}>
         <div
           className={`flex items-center gap-2 px-2 py-1 text-sm cursor-pointer hover:bg-gray-700 rounded transition-colors group ${
             isSelected ? 'bg-green-600 text-white' : 'text-gray-300'
-          }`}
+          } ${isDragOver ? 'bg-blue-600/50 border-2 border-blue-400' : ''}`}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          draggable={canDrag}
+          onDragStart={(e) => handleDragStart(e, item, currentPath)}
+          onDragOver={(e) => handleDragOver(e, item, currentPath)}
+          onDragEnter={(e) => handleDragEnter(e, item)}
+          onDragLeave={handleDragLeave}
+          onDrop={(e) => handleDrop(e, item, currentPath)}
           onClick={() => {
             if (hasChildren) {
               toggleFolder(item.id);
@@ -421,7 +558,7 @@ print("Configuration loaded")`;
           {!hasChildren && <div className="w-4"></div>}
           {item.icon}
           
-          {editingName === item.id ? (
+          {editingName === item.id && !isProtected ? (
             <input
               type="text"
               value={item.name}
@@ -444,40 +581,45 @@ print("Configuration loaded")`;
           )}
           
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {canHaveChildren && (
+            {/* Add button for ALL objects */}
+            <button
+              onClick={(e) => handleAddButtonClick(e, item, currentPath)}
+              className="p-0.5 hover:bg-gray-600 rounded transition-colors"
+              title="Add Object"
+            >
+              <Plus className="w-3 h-3 text-gray-400" />
+            </button>
+            
+            {/* Rename button - only for non-protected items */}
+            {!isProtected && (
               <button
-                onClick={(e) => handleAddButtonClick(e, item, currentPath)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingName(item.id);
+                }}
                 className="p-0.5 hover:bg-gray-600 rounded transition-colors"
-                title="Add Object"
+                title="Rename"
               >
-                <Plus className="w-3 h-3 text-gray-400" />
+                <Edit2 className="w-3 h-3 text-gray-400" />
               </button>
             )}
-            {!['workspace', 'replicatedStorage', 'serverStorage', 'soundService', 'mediaService', 'uiService', 'threedStorage', 'replicatedFirst'].includes(item.id) && (
-              <>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingName(item.id);
-                  }}
-                  className="p-0.5 hover:bg-gray-600 rounded transition-colors"
-                  title="Rename"
-                >
-                  <Edit2 className="w-3 h-3 text-gray-400" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteObject(currentPath);
-                  }}
-                  className="p-0.5 hover:bg-red-600 rounded transition-colors"
-                  title="Delete"
-                >
-                  <Trash2 className="w-3 h-3 text-gray-400" />
-                </button>
-              </>
+            
+            {/* Delete button - only for non-protected items */}
+            {!isProtected && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteObject(currentPath);
+                }}
+                className="p-0.5 hover:bg-red-600 rounded transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="w-3 h-3 text-gray-400" />
+              </button>
             )}
-            {!hasChildren && !canHaveChildren && (
+            
+            {/* More options for items without add/rename/delete */}
+            {!canHaveChildren && isProtected && (
               <button className="p-0.5 hover:bg-gray-600 rounded transition-colors">
                 <MoreHorizontal className="w-3 h-3 text-gray-400" />
               </button>
@@ -515,6 +657,7 @@ print("Configuration loaded")`;
           <div>• <span className="text-yellow-300">.vdata</span> - Database scripts</div>
           <div>• <span className="text-blue-300">Config</span> - Configuration object</div>
           <div>• <span className="text-blue-300">Ploid</span> - Character controller</div>
+          <div>• <span className="text-purple-300">Drag & Drop</span> - Reparent objects</div>
         </div>
       </div>
 

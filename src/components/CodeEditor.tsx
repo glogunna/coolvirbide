@@ -184,18 +184,6 @@ print("Configuration loaded successfully")`;
     autoSave();
   };
 
-  const highlightSyntax = (text: string) => {
-    if (!currentFile) return text;
-
-    return text
-      .replace(/\b(inst|function|if|else|while|for|return|print|CREATE|TABLE|SELECT|UPDATE|INSERT|DELETE|FROM|WHERE)\b/g, '<span style="color: #60A5FA; font-weight: 600;">$1</span>')
-      .replace(/\b(ReplicatedStorage|ServerStorage|Workspace|UIService|SoundService|MediaService|ReplicatedFirst|game|player|script|Parent)\b/g, '<span style="color: #10B981;">$1</span>')
-      .replace(/"([^"]*)"/g, '<span style="color: #FCD34D;">"$1"</span>')
-      .replace(/\/\/.*$/gm, '<span style="color: #6B7280;">$&</span>')
-      .replace(/--.*$/gm, '<span style="color: #6B7280;">$&</span>')
-      .replace(/\b(\d+)\b/g, '<span style="color: #F472B6;">$1</span>');
-  };
-
   const renderMediaPreview = () => {
     if (!currentFile) return null;
 
@@ -364,7 +352,7 @@ print("Configuration loaded successfully")`;
         </div>
       )}
 
-      {/* Code Editor */}
+      {/* Code Editor - FIXED: Removed overlapping syntax highlighting div */}
       <div className="flex-1 overflow-auto">
         <div className="flex">
           {/* Line Numbers */}
@@ -376,19 +364,15 @@ print("Configuration loaded successfully")`;
             ))}
           </div>
           
-          {/* Code Content */}
+          {/* Code Content - ONLY the textarea, no overlapping div */}
           <div className="flex-1 relative">
             <textarea
               value={code}
               onChange={(e) => handleCodeChange(e.target.value)}
-              className="w-full h-full bg-transparent text-white font-mono resize-none focus:outline-none leading-6 p-4 absolute inset-0 z-10"
+              className="w-full h-full bg-gray-900 text-white font-mono resize-none focus:outline-none leading-6 p-4 absolute inset-0"
               style={{ fontSize: `${fontSize}px` }}
               spellCheck={false}
-            />
-            <div 
-              className="w-full h-full font-mono leading-6 p-4 pointer-events-none whitespace-pre-wrap break-words"
-              style={{ fontSize: `${fontSize}px` }}
-              dangerouslySetInnerHTML={{ __html: highlightSyntax(code) }}
+              placeholder="// Start typing your code here..."
             />
           </div>
         </div>

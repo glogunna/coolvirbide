@@ -39,20 +39,27 @@ function App() {
   useEffect(() => {
     // Auto-open workspace for game projects
     if (project && (project.type === 'game3d' || project.type === 'game2d')) {
-      const workspaceTab: OpenTab = {
-        id: 'workspace-tab',
-        name: 'Workspace',
-        type: project.type === 'game3d' ? 'workspace3d' : 'workspace2d',
-        file: { id: 'workspace', name: 'Workspace', type: project.type === 'game3d' ? 'workspace3d' : 'workspace2d' }
-      };
-      setOpenTabs([workspaceTab]);
-      setActiveTabId('workspace-tab');
+      const displayMode = getWorkspaceDisplayMode();
+      
+      if (displayMode !== 'OFF') {
+        let workspaceType = 'workspace';
+        if (displayMode === 'THREED') {
+          workspaceType = 'workspace3d';
+        } else if (displayMode === 'TWOD') {
+          workspaceType = 'workspace2d';
+        }
+        
+        const workspaceTab: OpenTab = {
+          id: 'workspace-tab',
+          name: 'Workspace',
+          type: workspaceType,
+          file: { id: 'workspace', name: 'Workspace', type: workspaceType }
+        };
+        setOpenTabs([workspaceTab]);
+        setActiveTabId('workspace-tab');
+      }
     }
   }, [project]);
-
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
 
   const getWorkspaceDisplayMode = () => {
     if (!project) return 'OFF';
@@ -60,6 +67,7 @@ function App() {
     // Find workspace config
     const workspaceConfig = project.services.workspace.objects.find((obj: any) => obj.type === 'config');
     if (workspaceConfig && workspaceConfig.content) {
+      // Look for the DisplayMode setting in the config content
       const match = workspaceConfig.content.match(/workspace\.DisplayMode\s*=\s*"([^"]+)"/);
       if (match) {
         return match[1];
@@ -72,39 +80,43 @@ function App() {
     return 'OFF';
   };
 
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
   const handleFileSelect = (file: any) => {
+    // Check if this is a workspace folder or workspace object
+    if (file.id === 'workspace' || file.id === 'workspace-view' || file.type === 'workspace3d' || file.type === 'workspace2d') {
+      const displayMode = getWorkspaceDisplayMode();
+      
+      let workspaceType = 'workspace';
+      if (displayMode === 'THREED') {
+        workspaceType = 'workspace3d';
+      } else if (displayMode === 'TWOD') {
+        workspaceType = 'workspace2d';
+      }
+      
+      if (displayMode !== 'OFF') {
+        const workspaceTab: OpenTab = {
+          id: 'workspace-tab',
+          name: 'Workspace',
+          type: workspaceType,
+          file: { id: 'workspace', name: 'Workspace', type: workspaceType }
+        };
+        
+        // Remove existing workspace tab if any
+        const filteredTabs = openTabs.filter(tab => tab.id !== 'workspace-tab');
+        setOpenTabs([...filteredTabs, workspaceTab]);
+        setActiveTabId('workspace-tab');
+      }
+      return;
+    }
+    
     const existingTab = openTabs.find(tab => tab.file.id === file.id);
     
     if (existingTab) {
       setActiveTabId(existingTab.id);
     } else {
-      // Check if this is a workspace folder or workspace object
-      if (file.id === 'workspace' || file.id === 'workspace-view' || file.type === 'workspace3d' || file.type === 'workspace2d') {
-        const displayMode = getWorkspaceDisplayMode();
-        
-        let workspaceType = 'workspace';
-        if (displayMode === 'THREED') {
-          workspaceType = 'workspace3d';
-        } else if (displayMode === 'TWOD') {
-          workspaceType = 'workspace2d';
-        }
-        
-        if (displayMode !== 'OFF') {
-          const workspaceTab: OpenTab = {
-            id: 'workspace-tab',
-            name: 'Workspace',
-            type: workspaceType,
-            file: { id: 'workspace', name: 'Workspace', type: workspaceType }
-          };
-          
-          // Remove existing workspace tab if any
-          const filteredTabs = openTabs.filter(tab => tab.id !== 'workspace-tab');
-          setOpenTabs([...filteredTabs, workspaceTab]);
-          setActiveTabId('workspace-tab');
-        }
-        return;
-      }
-      
       const newTab: OpenTab = {
         id: `tab-${Date.now()}`,
         name: file.name,

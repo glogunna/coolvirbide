@@ -45,8 +45,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ currentFile }) => {
 
   const getSampleCode = (fileType: string) => {
     switch (fileType) {
-      case 'basic':
-        return `// Virb.IO Basic Script (.basic)
+      case 'vscript':
+        return `// Virb.IO Basic Script (.vscript)
 // This script runs on the server
 
 inst gameManager = SharedStorage.Scripts.GameManager
@@ -68,8 +68,8 @@ function onPlayerJoin(player) {
 game.onServerStart(onServerStart)
 game.onPlayerJoin(onPlayerJoin)`;
 
-      case 'home':
-        return `// Virb.IO Home Script (.home)
+      case 'vlscript':
+        return `// Virb.IO Home Script (.vlscript)
 // This script runs only on the client
 
 inst inputService = game.InputService
@@ -269,8 +269,8 @@ print("Configuration loaded successfully")`;
             <ul className="text-sm text-left space-y-1">
               <li>• Use <code className="text-green-300">inst</code> for variables</li>
               <li>• Reference assets: <code className="text-blue-300">SharedStorage.Images.Icon</code></li>
-              <li>• <code className="text-red-300">.home</code> for client-side code</li>
-              <li>• <code className="text-green-300">.basic</code> for server-side code</li>
+              <li>• <code className="text-red-300">.vlscript</code> for client-side code</li>
+              <li>• <code className="text-green-300">.vscript</code> for server-side code</li>
               <li>• <code className="text-yellow-300">.vdata</code> for databases</li>
               <li>• <code className="text-blue-300">Config</code> for object configuration</li>
             </ul>
@@ -295,8 +295,8 @@ print("Configuration loaded successfully")`;
             <span className="font-medium">{currentFile.name}</span>
             {hasUnsavedChanges && <span className="text-yellow-400" title="Auto-saving...">●</span>}
             <span className={`px-2 py-1 rounded text-xs font-semibold ${
-              currentFile.type === 'basic' ? 'bg-green-600 text-white' :
-              currentFile.type === 'home' ? 'bg-red-600 text-white' :
+              currentFile.type === 'vscript' ? 'bg-green-600 text-white' :
+              currentFile.type === 'vlscript' ? 'bg-red-600 text-white' :
               currentFile.type === 'vdata' ? 'bg-yellow-600 text-black' :
               currentFile.type === 'config' ? 'bg-blue-600 text-white' :
               'bg-gray-600 text-white'

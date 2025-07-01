@@ -52,8 +52,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
     { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties' },
     { id: 'model', name: 'Model', icon: '🏗️', description: 'Container for 3D objects' },
     { id: 'folder', name: 'Folder', icon: '📁', description: 'Organize objects in folders' },
-    { id: 'basic', name: 'Basic Script', icon: '📜', description: 'Server-side script (.basic)' },
-    { id: 'home', name: 'Home Script', icon: '📋', description: 'Client-side script (.home)' },
+    { id: 'vscript', name: 'Basic Script', icon: '📜', description: 'Server-side script (.vscript)' },
+    { id: 'vlscript', name: 'Home Script', icon: '📋', description: 'Client-side script (.vlscript)' },
     { id: 'vdata', name: 'Data Script', icon: '🗄️', description: 'Database script (.vdata)' },
     { id: 'ploid', name: 'Ploid', icon: '🤖', description: 'Character controller' },
     { id: 'part', name: 'Part', icon: '🧱', description: '3D part/block' },
@@ -126,7 +126,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             icon: <Folder className="w-4 h-4 text-green-400" />,
             children: project.services.replicatedStorage.scripts.map((script: any) => ({
               ...script,
-              type: script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type,
+              // Keep original type but map display type for icons
+              displayType: script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type,
               icon: <ScriptIcon type={script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type} />,
               children: script.children || []
             }))
@@ -140,7 +141,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         children: [
           ...project.services.serverStorage.scripts.map((script: any) => ({
             ...script,
-            type: script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type,
+            // Keep original type but map display type for icons
+            displayType: script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type,
             icon: <ScriptIcon type={script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type} />,
             children: script.children || []
           })),
@@ -149,7 +151,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             icon: <Folder className="w-4 h-4 text-cyan-400" />,
             children: char.children?.map((child: any) => ({
               ...child,
-              type: child.type === 'vlscript' ? 'home' : child.type,
+              // Keep original type but map display type for icons
+              displayType: child.type === 'vlscript' ? 'home' : child.type,
               icon: child.type === 'ploid' ? <Box className="w-4 h-4 text-green-400" /> : 
                     child.type === '3dobject' ? <Box className="w-4 h-4 text-indigo-400" /> :
                     child.type === 'vlscript' ? <ScriptIcon type="home" /> :
@@ -157,7 +160,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
                     <Image className="w-4 h-4 text-purple-400" />,
               children: child.children?.map((grandchild: any) => ({
                 ...grandchild,
-                type: grandchild.type === 'vscript' ? 'basic' : grandchild.type === 'vlscript' ? 'home' : grandchild.type,
+                // Keep original type but map display type for icons
+                displayType: grandchild.type === 'vscript' ? 'basic' : grandchild.type === 'vlscript' ? 'home' : grandchild.type,
                 icon: <ScriptIcon type={grandchild.type === 'vscript' ? 'basic' : grandchild.type === 'vlscript' ? 'home' : grandchild.type} />,
                 children: grandchild.children || []
               })) || []
@@ -291,8 +295,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
       'config': <ScriptIcon type="config" />,
       'model': <Box className="w-4 h-4 text-orange-400" />,
       'folder': <Folder className="w-4 h-4 text-gray-400" />,
-      'basic': <ScriptIcon type="basic" />,
-      'home': <ScriptIcon type="home" />,
+      'vscript': <ScriptIcon type="basic" />,
+      'vlscript': <ScriptIcon type="home" />,
       'vdata': <ScriptIcon type="vdata" />,
       'ploid': <Box className="w-4 h-4 text-green-400" />,
       'part': <Box className="w-4 h-4 text-blue-400" />,
@@ -308,7 +312,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
 
   const getDefaultContent = (type: string) => {
     switch (type) {
-      case 'basic':
+      case 'vscript':
         return `// Basic Script (Server)
 print("Basic script loaded")
 
@@ -317,7 +321,7 @@ function onPlayerJoin(player)
 end
 
 game.onPlayerJoin(onPlayerJoin)`;
-      case 'home':
+      case 'vlscript':
         return `// Home Script (Client)
 print("Home script loaded")
 
@@ -424,7 +428,7 @@ print("Configuration loaded")`;
   };
 
   const handleFileClick = (item: any) => {
-    if (item.warning && (item.type === 'home' || item.type === 'basic')) {
+    if (item.warning && (item.type === 'vlscript' || item.type === 'vscript')) {
       setShowWarning(item.id);
       return;
     }
@@ -645,8 +649,8 @@ print("Configuration loaded")`;
         <h3 className="text-sm font-semibold text-green-400 mb-2">Virb.IO Reference</h3>
         <div className="text-xs text-gray-400 space-y-1">
           <div>• <span className="text-green-300">inst</span> variable = SharedStorage.Images.Image1</div>
-          <div>• <span className="text-red-300">.home</span> - Client scripts</div>
-          <div>• <span className="text-green-300">.basic</span> - Server scripts</div>
+          <div>• <span className="text-red-300">.vlscript</span> - Home scripts (client-side)</div>
+          <div>• <span className="text-green-300">.vscript</span> - Basic scripts (server-side)</div>
           <div>• <span className="text-yellow-300">.vdata</span> - Database scripts</div>
           <div>• <span className="text-blue-300">Config</span> - Configuration object</div>
           <div>• <span className="text-blue-300">Ploid</span> - Character controller</div>

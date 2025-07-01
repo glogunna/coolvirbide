@@ -53,12 +53,12 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
           { id: 'bgm1', name: 'BackgroundMusic.mp3', type: 'sound', duration: '3:24' }
         ] : [],
         scripts: type !== 'blank' ? [
-          { id: 'gameManager', name: type === 'webapp' ? 'AppManager.basic' : 'GameManager.basic', type: 'basic', content: getTemplateScript(type, 'gameManager') }
+          { id: 'gameManager', name: type === 'webapp' ? 'AppManager.vscript' : 'GameManager.vscript', type: 'vscript', content: getTemplateScript(type, 'gameManager') }
         ] : []
       },
       serverStorage: {
         scripts: type !== 'blank' ? [
-          { id: 'serverInit', name: 'ServerInit.basic', type: 'basic', content: getTemplateScript(type, 'serverInit') }
+          { id: 'serverInit', name: 'ServerInit.vscript', type: 'vscript', content: getTemplateScript(type, 'serverInit') }
         ] : [],
         character: type.includes('game') ? [
           { 
@@ -87,22 +87,22 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
               },
               {
                 id: 'inputScript',
-                name: 'InputHandler.home',
-                type: 'home',
+                name: 'InputHandler.vlscript',
+                type: 'vlscript',
                 content: getTemplateScript(type, 'inputHandler'),
                 warning: true
               },
               {
                 id: 'cameraScript',
-                name: 'CameraController.home',
-                type: 'home',
+                name: 'CameraController.vlscript',
+                type: 'vlscript',
                 content: getTemplateScript(type, 'cameraController'),
                 warning: true
               },
               {
                 id: 'movementScript',
-                name: 'MovementController.home',
-                type: 'home',
+                name: 'MovementController.vlscript',
+                type: 'vlscript',
                 content: getTemplateScript(type, 'movementController'),
                 warning: true
               }

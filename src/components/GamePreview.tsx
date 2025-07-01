@@ -1,37 +1,39 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Play, Square, RotateCcw, Settings, Maximize } from 'lucide-react';
+import * as THREE from 'three';
 
 interface GamePreviewProps {
   project: any;
 }
 
 export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mountRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<THREE.Scene>();
+  const rendererRef = useRef<THREE.WebGLRenderer>();
+  const cameraRef = useRef<THREE.PerspectiveCamera>();
+  const playerRef = useRef<THREE.Mesh>();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [gameStats, setGameStats] = useState({
     fps: 60,
     objects: 0,
     memory: '12.5MB'
   });
+  const [keys, setKeys] = useState<Set<string>>(new Set());
+  const [playerPosition, setPlayerPosition] = useState({ x: 0, y: 1, z: 0 });
+  const [playerVelocity, setPlayerVelocity] = useState({ x: 0, y: 0, z: 0 });
+  const [isGrounded, setIsGrounded] = useState(true);
+  const [cameraAngle, setCameraAngle] = useState({ horizontal: 0, vertical: 0 });
 
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!mountRef.current) return;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Set canvas size
-    canvas.width = 800;
-    canvas.height = 600;
-
-    // Initialize game based on project type
+    // Initialize based on project type
     if (project.type === 'game3d') {
-      render3DGame(ctx);
+      init3DGame();
     } else if (project.type === 'game2d') {
-      render2DGame(ctx);
+      render2DGame();
     } else {
-      renderWebApp(ctx);
+      renderWebApp();
     }
 
     // Update stats
@@ -42,76 +44,253 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     });
   }, [project]);
 
-  const render3DGame = (ctx: CanvasRenderingContext2D) => {
-    // Clear canvas
-    ctx.fillStyle = '#87CEEB'; // Sky blue
-    ctx.fillRect(0, 0, 800, 600);
+  const init3DGame = () => {
+    if (!mountRef.current) return;
 
-    // Draw ground
-    ctx.fillStyle = '#228B22';
-    ctx.fillRect(0, 400, 800, 200);
+    // Clear any existing content
+    mountRef.current.innerHTML = '';
 
-    // Draw 3D-looking terrain
-    ctx.fillStyle = '#32CD32';
-    for (let i = 0; i < 10; i++) {
-      const x = i * 80;
-      const height = Math.sin(i * 0.5) * 50 + 50;
-      ctx.fillRect(x, 400 - height, 80, height);
-    }
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87CEEB);
+    sceneRef.current = scene;
 
-    // Draw player character (3D cube)
-    ctx.save();
-    ctx.translate(400, 350);
-    
-    // Cube faces
-    ctx.fillStyle = '#FF6B6B';
-    ctx.fillRect(-20, -40, 40, 40); // Front face
-    
-    ctx.fillStyle = '#FF5252';
-    ctx.beginPath();
-    ctx.moveTo(20, -40);
-    ctx.lineTo(30, -50);
-    ctx.lineTo(30, -10);
-    ctx.lineTo(20, 0);
-    ctx.closePath();
-    ctx.fill(); // Right face
-    
-    ctx.fillStyle = '#FF8A80';
-    ctx.beginPath();
-    ctx.moveTo(-20, -40);
-    ctx.lineTo(-10, -50);
-    ctx.lineTo(30, -50);
-    ctx.lineTo(20, -40);
-    ctx.closePath();
-    ctx.fill(); // Top face
-    
-    ctx.restore();
+    // Camera setup
+    const camera = new THREE.PerspectiveCamera(75, 800 / 600, 0.1, 1000);
+    camera.position.set(0, 5, 10);
+    cameraRef.current = camera;
 
-    // Draw UI overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(10, 10, 200, 80);
-    ctx.fillStyle = '#10B981';
-    ctx.font = '16px monospace';
-    ctx.fillText('3D Game Running', 20, 30);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = '12px monospace';
-    ctx.fillText('WASD: Move', 20, 50);
-    ctx.fillText('Mouse: Look around', 20, 65);
-    ctx.fillText('Space: Jump', 20, 80);
+    // Renderer setup
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(800, 600);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    rendererRef.current = renderer;
 
-    // Health bar
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(10, 550, 120, 30);
-    ctx.fillStyle = '#FF4444';
-    ctx.fillRect(15, 555, 110, 20);
-    ctx.fillStyle = '#44FF44';
-    ctx.fillRect(15, 555, 88, 20); // 80% health
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = '12px monospace';
-    ctx.fillText('Health: 80%', 20, 568);
+    mountRef.current.appendChild(renderer.domElement);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(10, 10, 5);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 50;
+    directionalLight.shadow.camera.left = -20;
+    directionalLight.shadow.camera.right = 20;
+    directionalLight.shadow.camera.top = 20;
+    directionalLight.shadow.camera.bottom = -20;
+    scene.add(directionalLight);
+
+    // Create ground/baseplate
+    const groundGeometry = new THREE.BoxGeometry(50, 1, 50);
+    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.position.y = -0.5;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Create player character (cube)
+    const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
+    const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF6B6B });
+    const player = new THREE.Mesh(playerGeometry, playerMaterial);
+    player.position.set(0, 1, 0);
+    player.castShadow = true;
+    scene.add(player);
+    playerRef.current = player;
+
+    // Add some environment objects
+    const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
+    const cubeMaterial = new THREE.MeshLambertMaterial({ color: 0x4ECDC4 });
+    const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    cube.position.set(5, 1, 0);
+    cube.castShadow = true;
+    scene.add(cube);
+
+    const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+    const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0xFFE66D });
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    sphere.position.set(-5, 1, 0);
+    sphere.castShadow = true;
+    scene.add(sphere);
+
+    // Grid helper
+    const gridHelper = new THREE.GridHelper(50, 50);
+    gridHelper.position.y = 0;
+    scene.add(gridHelper);
+
+    // Mouse controls for camera
+    let isMouseDown = false;
+    let mouseX = 0;
+    let mouseY = 0;
+
+    const onMouseDown = (event: MouseEvent) => {
+      isMouseDown = true;
+      mouseX = event.clientX;
+      mouseY = event.clientY;
+    };
+
+    const onMouseMove = (event: MouseEvent) => {
+      if (!isMouseDown) return;
+
+      const deltaX = event.clientX - mouseX;
+      const deltaY = event.clientY - mouseY;
+
+      setCameraAngle(prev => ({
+        horizontal: prev.horizontal - deltaX * 0.005,
+        vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical - deltaY * 0.005))
+      }));
+
+      mouseX = event.clientX;
+      mouseY = event.clientY;
+    };
+
+    const onMouseUp = () => {
+      isMouseDown = false;
+    };
+
+    // Keyboard controls
+    const onKeyDown = (event: KeyboardEvent) => {
+      setKeys(prev => new Set(prev).add(event.key.toLowerCase()));
+    };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      setKeys(prev => {
+        const newKeys = new Set(prev);
+        newKeys.delete(event.key.toLowerCase());
+        return newKeys;
+      });
+    };
+
+    renderer.domElement.addEventListener('mousedown', onMouseDown);
+    renderer.domElement.addEventListener('mousemove', onMouseMove);
+    renderer.domElement.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    // Game loop
+    const gameLoop = () => {
+      updatePlayer();
+      updateCamera();
+      renderer.render(scene, camera);
+      requestAnimationFrame(gameLoop);
+    };
+    gameLoop();
+
+    // Cleanup function
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      if (mountRef.current && renderer.domElement) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+      renderer.dispose();
+    };
   };
 
-  const render2DGame = (ctx: CanvasRenderingContext2D) => {
+  const updatePlayer = () => {
+    if (!playerRef.current) return;
+
+    const moveSpeed = 0.1;
+    const jumpPower = 0.3;
+    const gravity = -0.02;
+
+    // Handle movement
+    let moveX = 0;
+    let moveZ = 0;
+
+    if (keys.has('w') || keys.has('arrowup')) moveZ -= moveSpeed;
+    if (keys.has('s') || keys.has('arrowdown')) moveZ += moveSpeed;
+    if (keys.has('a') || keys.has('arrowleft')) moveX -= moveSpeed;
+    if (keys.has('d') || keys.has('arrowright')) moveX += moveSpeed;
+
+    // Apply movement relative to camera direction
+    const cameraDirection = new THREE.Vector3();
+    cameraDirection.x = Math.sin(cameraAngle.horizontal);
+    cameraDirection.z = Math.cos(cameraAngle.horizontal);
+
+    const rightDirection = new THREE.Vector3();
+    rightDirection.x = Math.cos(cameraAngle.horizontal);
+    rightDirection.z = -Math.sin(cameraAngle.horizontal);
+
+    setPlayerVelocity(prev => ({
+      x: (cameraDirection.x * moveZ + rightDirection.x * moveX),
+      y: prev.y,
+      z: (cameraDirection.z * moveZ + rightDirection.z * moveX)
+    }));
+
+    // Handle jumping
+    if ((keys.has(' ') || keys.has('space')) && isGrounded) {
+      setPlayerVelocity(prev => ({ ...prev, y: jumpPower }));
+      setIsGrounded(false);
+    }
+
+    // Apply gravity
+    setPlayerVelocity(prev => ({ ...prev, y: prev.y + gravity }));
+
+    // Update position
+    setPlayerPosition(prev => {
+      const newPos = {
+        x: prev.x + playerVelocity.x,
+        y: prev.y + playerVelocity.y,
+        z: prev.z + playerVelocity.z
+      };
+
+      // Ground collision
+      if (newPos.y <= 1) {
+        newPos.y = 1;
+        setPlayerVelocity(prev => ({ ...prev, y: 0 }));
+        setIsGrounded(true);
+      }
+
+      // Update player mesh position
+      playerRef.current!.position.set(newPos.x, newPos.y, newPos.z);
+
+      return newPos;
+    });
+
+    // Apply friction
+    setPlayerVelocity(prev => ({
+      x: prev.x * 0.8,
+      y: prev.y,
+      z: prev.z * 0.8
+    }));
+  };
+
+  const updateCamera = () => {
+    if (!cameraRef.current || !playerRef.current) return;
+
+    const camera = cameraRef.current;
+    const player = playerRef.current;
+
+    // Third-person camera
+    const cameraDistance = 8;
+    const cameraHeight = 3;
+
+    const cameraX = player.position.x + Math.sin(cameraAngle.horizontal) * cameraDistance;
+    const cameraZ = player.position.z + Math.cos(cameraAngle.horizontal) * cameraDistance;
+    const cameraY = player.position.y + cameraHeight + Math.sin(cameraAngle.vertical) * 3;
+
+    camera.position.set(cameraX, cameraY, cameraZ);
+    camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
+  };
+
+  const render2DGame = () => {
+    if (!mountRef.current) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 600;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    mountRef.current.innerHTML = '';
+    mountRef.current.appendChild(canvas);
+
     // Clear canvas with gradient background
     const gradient = ctx.createLinearGradient(0, 0, 0, 600);
     gradient.addColorStop(0, '#4A90E2');
@@ -169,7 +348,18 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     ctx.fillText('Coins: 5/10', 660, 45);
   };
 
-  const renderWebApp = (ctx: CanvasRenderingContext2D) => {
+  const renderWebApp = () => {
+    if (!mountRef.current) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 600;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    mountRef.current.innerHTML = '';
+    mountRef.current.appendChild(canvas);
+
     // Clear canvas with app background
     ctx.fillStyle = '#F3F4F6';
     ctx.fillRect(0, 0, 800, 600);
@@ -254,18 +444,18 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   };
 
   const resetGame = () => {
-    // Trigger re-render
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        if (project.type === 'game3d') {
-          render3DGame(ctx);
-        } else if (project.type === 'game2d') {
-          render2DGame(ctx);
-        } else {
-          renderWebApp(ctx);
-        }
-      }
+    // Reset player position and camera
+    setPlayerPosition({ x: 0, y: 1, z: 0 });
+    setPlayerVelocity({ x: 0, y: 0, z: 0 });
+    setCameraAngle({ horizontal: 0, vertical: 0 });
+    setIsGrounded(true);
+    
+    if (playerRef.current) {
+      playerRef.current.position.set(0, 1, 0);
+    }
+    
+    if (cameraRef.current) {
+      cameraRef.current.position.set(0, 5, 10);
     }
   };
 
@@ -312,13 +502,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       {/* Game Canvas */}
       <div className={`flex-1 flex items-center justify-center p-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-black' : ''}`}>
         <div className="relative">
-          <canvas
-            ref={canvasRef}
+          <div
+            ref={mountRef}
             className={`border border-gray-600 rounded-lg shadow-lg ${isFullscreen ? 'w-full h-full' : ''}`}
             style={{ 
-              imageRendering: 'pixelated',
-              maxWidth: isFullscreen ? '100vw' : '800px',
-              maxHeight: isFullscreen ? '100vh' : '600px'
+              width: isFullscreen ? '100vw' : '800px',
+              height: isFullscreen ? '100vh' : '600px'
             }}
           />
           
@@ -327,9 +516,11 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             <div className="text-sm space-y-1">
               {project.type === 'game3d' && (
                 <>
-                  <div>WASD: Move</div>
-                  <div>Mouse: Look</div>
+                  <div className="text-green-400 font-semibold">3D Game Controls:</div>
+                  <div>WASD / Arrow Keys: Move</div>
+                  <div>Mouse Drag: Rotate Camera</div>
                   <div>Space: Jump</div>
+                  <div className="text-yellow-400">Player: Red Cube</div>
                 </>
               )}
               {project.type === 'game2d' && (
@@ -354,6 +545,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             <div>FPS: {gameStats.fps}</div>
             <div>Memory: {gameStats.memory}</div>
             <div>Objects: {gameStats.objects}</div>
+            {project.type === 'game3d' && (
+              <>
+                <div>Player: ({playerPosition.x.toFixed(1)}, {playerPosition.y.toFixed(1)}, {playerPosition.z.toFixed(1)})</div>
+                <div>Grounded: {isGrounded ? 'Yes' : 'No'}</div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -364,14 +561,21 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           <div className="text-green-400">[INFO] Game initialized successfully</div>
           <div className="text-blue-400">[DEBUG] Loading {project.type} environment...</div>
           <div className="text-green-400">[INFO] All assets loaded</div>
-          <div className="text-yellow-400">[WARN] Performance monitoring active</div>
-          <div className="text-green-400">[INFO] Game loop started at 60 FPS</div>
-          {project.type.includes('game') && (
-            <div className="text-blue-400">[DEBUG] Physics engine initialized</div>
+          {project.type === 'game3d' && (
+            <>
+              <div className="text-blue-400">[DEBUG] 3D scene created with THREE.js</div>
+              <div className="text-green-400">[INFO] Player character spawned (Red Cube)</div>
+              <div className="text-blue-400">[DEBUG] Physics engine initialized</div>
+              <div className="text-yellow-400">[INFO] Controls: WASD/Arrows=Move, Mouse=Camera, Space=Jump</div>
+            </>
+          )}
+          {project.type === 'game2d' && (
+            <div className="text-blue-400">[DEBUG] 2D physics engine initialized</div>
           )}
           {project.type === 'webapp' && (
             <div className="text-blue-400">[DEBUG] API endpoints registered</div>
           )}
+          <div className="text-green-400">[INFO] Game loop started at 60 FPS</div>
         </div>
       </div>
     </div>

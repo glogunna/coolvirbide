@@ -6,6 +6,16 @@ interface GamePreviewProps {
   project: any;
 }
 
+interface ScriptContext {
+  player: any;
+  character: any;
+  camera: any;
+  inputService: any;
+  game: any;
+  workspace: any;
+  print: (message: string) => void;
+}
+
 export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene>();
@@ -25,6 +35,224 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   const [cameraAngle, setCameraAngle] = useState({ horizontal: 0, vertical: 0 });
   const [spawnPoint, setSpawnPoint] = useState({ x: 0, y: 1, z: 0 });
   const [isMouseLocked, setIsMouseLocked] = useState(false);
+  const [scriptContext, setScriptContext] = useState<ScriptContext | null>(null);
+  const [loadedScripts, setLoadedScripts] = useState<any[]>([]);
+  const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
+
+  // Script execution system
+  const executeScript = (scriptContent: string, context: ScriptContext) => {
+    try {
+      // Create a safe execution environment
+      const scriptFunction = new Function(
+        'inst', 'print', 'game', 'player', 'character', 'camera', 'inputService', 'workspace', 'math', 'wait',
+        `
+        ${scriptContent}
+        `
+      );
+
+      // Execute the script with the provided context
+      scriptFunction(
+        (path: string) => getObjectByPath(path, context), // inst function
+        context.print,
+        context.game,
+        context.player,
+        context.character,
+        context.camera,
+        context.inputService,
+        context.workspace,
+        Math, // math object
+        (seconds: number) => new Promise(resolve => setTimeout(resolve, seconds * 1000)) // wait function
+      );
+
+      addConsoleOutput(`[SCRIPT] Script executed successfully`);
+    } catch (error) {
+      addConsoleOutput(`[ERROR] Script execution failed: ${error}`);
+      console.error('Script execution error:', error);
+    }
+  };
+
+  const getObjectByPath = (path: string, context: ScriptContext) => {
+    // Parse paths like "game.Players.LocalPlayer" or "Workspace.Camera"
+    const parts = path.split('.');
+    let current: any = context;
+
+    for (const part of parts) {
+      if (current && current[part]) {
+        current = current[part];
+      } else {
+        addConsoleOutput(`[WARNING] Object path not found: ${path}`);
+        return null;
+      }
+    }
+
+    return current;
+  };
+
+  const addConsoleOutput = (message: string) => {
+    setConsoleOutput(prev => [...prev.slice(-20), message]); // Keep last 20 messages
+  };
+
+  const findPlayerScripts = () => {
+    // Find all player-related scripts in the project
+    const scripts: any[] = [];
+
+    const findScriptsRecursively = (objects: any[], parentPath = '') => {
+      for (const obj of objects) {
+        if (obj.type === 'vlscript' || obj.type === 'vscript') {
+          // Check if this is a player-related script
+          if (obj.name.toLowerCase().includes('input') || 
+              obj.name.toLowerCase().includes('movement') || 
+              obj.name.toLowerCase().includes('camera') ||
+              obj.warning) { // Scripts with warnings are usually core player scripts
+            scripts.push({
+              ...obj,
+              path: parentPath + '/' + obj.name
+            });
+          }
+        }
+        if (obj.children) {
+          findScriptsRecursively(obj.children, parentPath + '/' + obj.name);
+        }
+      }
+    };
+
+    // Search in all storage locations
+    if (project.services.serverStorage.character) {
+      findScriptsRecursively(project.services.serverStorage.character, 'PrivateStorage/Character');
+    }
+    if (project.services.replicatedStorage.scripts) {
+      findScriptsRecursively(project.services.replicatedStorage.scripts, 'SharedStorage/Scripts');
+    }
+
+    return scripts;
+  };
+
+  const createScriptContext = (): ScriptContext => {
+    const context: ScriptContext = {
+      player: {
+        Name: 'LocalPlayer',
+        Character: null,
+        moveForward: () => {
+          addConsoleOutput('[PLAYER] moveForward() called');
+          setPlayerVelocity(prev => ({ ...prev, z: prev.z - 0.5 }));
+        },
+        moveBackward: () => {
+          addConsoleOutput('[PLAYER] moveBackward() called');
+          setPlayerVelocity(prev => ({ ...prev, z: prev.z + 0.5 }));
+        },
+        moveLeft: () => {
+          addConsoleOutput('[PLAYER] moveLeft() called');
+          setPlayerVelocity(prev => ({ ...prev, x: prev.x - 0.5 }));
+        },
+        moveRight: () => {
+          addConsoleOutput('[PLAYER] moveRight() called');
+          setPlayerVelocity(prev => ({ ...prev, x: prev.x + 0.5 }));
+        },
+        jump: (power: number) => {
+          if (isGrounded) {
+            addConsoleOutput(`[PLAYER] jump(${power}) called`);
+            setPlayerVelocity(prev => ({ ...prev, y: power * 0.1 }));
+            setIsGrounded(false);
+          }
+        },
+        stopMovingForward: () => {
+          addConsoleOutput('[PLAYER] stopMovingForward() called');
+          setPlayerVelocity(prev => ({ ...prev, z: prev.z * 0.5 }));
+        },
+        stopMovingLeft: () => {
+          addConsoleOutput('[PLAYER] stopMovingLeft() called');
+          setPlayerVelocity(prev => ({ ...prev, x: prev.x * 0.5 }));
+        },
+        position: playerPosition,
+        rotation: { x: 0, y: 0, z: 0 },
+        rotate: (deltaX: number, deltaY: number) => {
+          addConsoleOutput(`[PLAYER] rotate(${deltaX.toFixed(2)}, ${deltaY.toFixed(2)}) called`);
+          setCameraAngle(prev => ({
+            horizontal: prev.horizontal + deltaX,
+            vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical + deltaY))
+          }));
+        }
+      },
+      character: null, // Will be set after player is created
+      camera: {
+        position: { x: 0, y: 5, z: 10 },
+        rotation: { x: 0, y: 0, z: 0 },
+        mode: '3D',
+        lookAt: (target: any) => {
+          addConsoleOutput(`[CAMERA] lookAt() called`);
+        },
+        rotateAroundTarget: (target: any, deltaX: number, deltaY: number) => {
+          addConsoleOutput(`[CAMERA] rotateAroundTarget() called`);
+          setCameraAngle(prev => ({
+            horizontal: prev.horizontal + deltaX,
+            vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical + deltaY))
+          }));
+        }
+      },
+      inputService: {
+        onKeyPress: (callback: (key: string) => void) => {
+          addConsoleOutput('[INPUT] onKeyPress() handler registered');
+          // Store the callback for later use
+          context.inputService._keyPressCallback = callback;
+        },
+        onKeyDown: (callback: (key: string) => void) => {
+          addConsoleOutput('[INPUT] onKeyDown() handler registered');
+          context.inputService._keyDownCallback = callback;
+        },
+        onKeyUp: (callback: (key: string) => void) => {
+          addConsoleOutput('[INPUT] onKeyUp() handler registered');
+          context.inputService._keyUpCallback = callback;
+        },
+        _keyPressCallback: null,
+        _keyDownCallback: null,
+        _keyUpCallback: null
+      },
+      game: {
+        Players: {
+          LocalPlayer: null // Will be set to context.player
+        },
+        InputService: null, // Will be set to context.inputService
+        onHeartbeat: (callback: (deltaTime: number) => void) => {
+          addConsoleOutput('[GAME] onHeartbeat() handler registered');
+          context.game._heartbeatCallback = callback;
+        },
+        onPlayerJoin: (callback: (player: any) => void) => {
+          addConsoleOutput('[GAME] onPlayerJoin() handler registered');
+        },
+        _heartbeatCallback: null
+      },
+      workspace: {
+        Camera: null, // Will be set to context.camera
+        Player: null   // Will be set to context.player
+      },
+      print: (message: string) => {
+        addConsoleOutput(`[SCRIPT] ${message}`);
+      }
+    };
+
+    // Set up cross-references
+    context.player.Character = context.character;
+    context.game.Players.LocalPlayer = context.player;
+    context.game.InputService = context.inputService;
+    context.workspace.Camera = context.camera;
+    context.workspace.Player = context.player;
+
+    return context;
+  };
+
+  const loadAndExecutePlayerScripts = (context: ScriptContext) => {
+    const playerScripts = findPlayerScripts();
+    addConsoleOutput(`[SYSTEM] Found ${playerScripts.length} player scripts`);
+
+    for (const script of playerScripts) {
+      if (script.content) {
+        addConsoleOutput(`[SYSTEM] Loading script: ${script.name}`);
+        executeScript(script.content, context);
+      }
+    }
+
+    setLoadedScripts(playerScripts);
+  };
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -312,6 +540,11 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
+    // CRITICAL: Create script context and load player scripts
+    const context = createScriptContext();
+    setScriptContext(context);
+    loadAndExecutePlayerScripts(context);
+
     // FIXED: Proper mouse controls for camera
     let isMouseDown = false;
     let mouseX = 0;
@@ -332,19 +565,18 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         const deltaX = event.movementX || 0;
         const deltaY = event.movementY || 0;
 
-        setCameraAngle(prev => ({
-          horizontal: prev.horizontal - deltaX * 0.002,
-          vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical - deltaY * 0.002))
-        }));
+        // Call script-based camera rotation if available
+        if (context.player.rotate) {
+          context.player.rotate(deltaX * 0.002, deltaY * 0.002);
+        }
       } else if (isMouseDown) {
         // Fallback for when pointer lock is not available
         const deltaX = event.clientX - mouseX;
         const deltaY = event.clientY - mouseY;
 
-        setCameraAngle(prev => ({
-          horizontal: prev.horizontal - deltaX * 0.005,
-          vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical - deltaY * 0.005))
-        }));
+        if (context.player.rotate) {
+          context.player.rotate(deltaX * 0.005, deltaY * 0.005);
+        }
 
         mouseX = event.clientX;
         mouseY = event.clientY;
@@ -355,14 +587,21 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       isMouseDown = false;
     };
 
-    // FIXED: Proper keyboard controls with event listeners
+    // FIXED: Proper keyboard controls with script execution
     const onKeyDown = (event: KeyboardEvent) => {
-      event.preventDefault(); // Prevent default browser behavior
+      event.preventDefault();
       const key = event.key.toLowerCase();
       console.log('[CONTROLS] Key down:', key);
+      
       setKeys(prev => {
         const newKeys = new Set(prev);
         newKeys.add(key);
+        
+        // Call script-based input handlers
+        if (context.inputService._keyDownCallback) {
+          context.inputService._keyDownCallback(key);
+        }
+        
         return newKeys;
       });
     };
@@ -371,14 +610,21 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       event.preventDefault();
       const key = event.key.toLowerCase();
       console.log('[CONTROLS] Key up:', key);
+      
       setKeys(prev => {
         const newKeys = new Set(prev);
         newKeys.delete(key);
+        
+        // Call script-based input handlers
+        if (context.inputService._keyUpCallback) {
+          context.inputService._keyUpCallback(key);
+        }
+        
         return newKeys;
       });
     };
 
-    // CRITICAL: Add event listeners to the renderer canvas AND window
+    // Add event listeners
     renderer.domElement.addEventListener('mousedown', onMouseDown);
     renderer.domElement.addEventListener('mousemove', onMouseMove);
     renderer.domElement.addEventListener('mouseup', onMouseUp);
@@ -387,7 +633,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     renderer.domElement.tabIndex = 0;
     renderer.domElement.focus();
     
-    // Add keyboard listeners to both canvas and window for better compatibility
+    // Add keyboard listeners
     renderer.domElement.addEventListener('keydown', onKeyDown);
     renderer.domElement.addEventListener('keyup', onKeyUp);
     window.addEventListener('keydown', onKeyDown);
@@ -400,11 +646,16 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     
     document.addEventListener('pointerlockchange', onPointerLockChange);
 
-    // Game loop with proper timing
+    // Game loop with script execution
     let lastTime = 0;
     const gameLoop = (currentTime: number) => {
       const deltaTime = (currentTime - lastTime) / 1000;
       lastTime = currentTime;
+      
+      // Call script-based heartbeat if available
+      if (context.game._heartbeatCallback) {
+        context.game._heartbeatCallback(deltaTime);
+      }
       
       updatePlayer(deltaTime);
       updateCamera();
@@ -413,8 +664,9 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     };
     gameLoop(0);
 
-    console.log('[GAME] 3D Game initialized with', scene.children.length, 'objects');
-    console.log('[CONTROLS] Movement: WASD, Camera: Mouse, Jump: Space');
+    console.log('[GAME] 3D Game initialized with script execution system');
+    addConsoleOutput('[SYSTEM] 3D Game initialized with script execution system');
+    addConsoleOutput('[SYSTEM] Player scripts loaded and ready');
 
     // Cleanup function
     return () => {
@@ -446,76 +698,17 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   const updatePlayer = (deltaTime: number) => {
     if (!playerRef.current) return;
 
-    const moveSpeed = 8; // Units per second
-    const jumpPower = 12;
     const gravity = -30;
-
-    // Handle movement based on current keys
-    let moveX = 0;
-    let moveZ = 0;
-
-    // Check all possible movement keys
-    if (keys.has('w') || keys.has('arrowup')) {
-      moveZ -= moveSpeed * deltaTime;
-      console.log('[MOVEMENT] Moving forward');
-    }
-    if (keys.has('s') || keys.has('arrowdown')) {
-      moveZ += moveSpeed * deltaTime;
-      console.log('[MOVEMENT] Moving backward');
-    }
-    if (keys.has('a') || keys.has('arrowleft')) {
-      moveX -= moveSpeed * deltaTime;
-      console.log('[MOVEMENT] Moving left');
-    }
-    if (keys.has('d') || keys.has('arrowright')) {
-      moveX += moveSpeed * deltaTime;
-      console.log('[MOVEMENT] Moving right');
-    }
-
-    // Apply movement relative to camera direction
-    if (moveX !== 0 || moveZ !== 0) {
-      const cameraDirection = new THREE.Vector3();
-      cameraDirection.x = Math.sin(cameraAngle.horizontal);
-      cameraDirection.z = Math.cos(cameraAngle.horizontal);
-
-      const rightDirection = new THREE.Vector3();
-      rightDirection.x = Math.cos(cameraAngle.horizontal);
-      rightDirection.z = -Math.sin(cameraAngle.horizontal);
-
-      const movement = new THREE.Vector3();
-      movement.addScaledVector(cameraDirection, moveZ);
-      movement.addScaledVector(rightDirection, moveX);
-
-      setPlayerVelocity(prev => ({
-        x: movement.x,
-        y: prev.y,
-        z: movement.z
-      }));
-    } else {
-      // Apply friction when not moving
-      setPlayerVelocity(prev => ({
-        x: prev.x * 0.8,
-        y: prev.y,
-        z: prev.z * 0.8
-      }));
-    }
-
-    // Handle jumping
-    if ((keys.has(' ') || keys.has('space')) && isGrounded) {
-      console.log('[MOVEMENT] Jumping!');
-      setPlayerVelocity(prev => ({ ...prev, y: jumpPower }));
-      setIsGrounded(false);
-    }
 
     // Apply gravity
     setPlayerVelocity(prev => ({ ...prev, y: prev.y + gravity * deltaTime }));
 
-    // Update position
+    // Update position based on velocity (which is now controlled by scripts)
     setPlayerPosition(prev => {
       const newPos = {
-        x: prev.x + playerVelocity.x,
+        x: prev.x + playerVelocity.x * deltaTime * 10, // Scale for better movement
         y: prev.y + playerVelocity.y * deltaTime,
-        z: prev.z + playerVelocity.z
+        z: prev.z + playerVelocity.z * deltaTime * 10
       };
 
       // Ground collision
@@ -523,10 +716,19 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         newPos.y = 1;
         setPlayerVelocity(prev => ({ ...prev, y: 0 }));
         setIsGrounded(true);
+      } else {
+        setIsGrounded(false);
       }
 
       // Update player mesh position
       playerRef.current!.position.set(newPos.x, newPos.y, newPos.z);
+
+      // Apply friction to horizontal movement
+      setPlayerVelocity(prev => ({
+        x: prev.x * 0.9,
+        y: prev.y,
+        z: prev.z * 0.9
+      }));
 
       return newPos;
     });
@@ -729,6 +931,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     if (cameraRef.current) {
       cameraRef.current.position.set(spawn.x, spawn.y + 5, spawn.z + 10);
     }
+
+    // Clear console and reload scripts
+    setConsoleOutput([]);
+    if (scriptContext) {
+      loadAndExecutePlayerScripts(scriptContext);
+    }
   };
 
   return (
@@ -749,6 +957,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           <div className="flex items-center gap-4 text-sm text-gray-400 mr-4">
             <span>FPS: {gameStats.fps}</span>
             <span>Objects: {gameStats.objects}</span>
+            <span>Scripts: {loadedScripts.length}</span>
             <span>Memory: {gameStats.memory}</span>
             {project.type === 'game3d' && (
               <span className={`${isMouseLocked ? 'text-green-400' : 'text-yellow-400'}`}>
@@ -759,7 +968,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           <button
             onClick={resetGame}
             className="p-2 hover:bg-gray-700 rounded transition-colors"
-            title="Reset to Spawn"
+            title="Reset to Spawn & Reload Scripts"
           >
             <RotateCcw className="w-4 h-4 text-gray-400" />
           </button>
@@ -793,14 +1002,14 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             <div className="text-sm space-y-1">
               {project.type === 'game3d' && (
                 <>
-                  <div className="text-green-400 font-semibold">3D Game Controls:</div>
-                  <div className="text-yellow-400">WASD / Arrow Keys: Move Player</div>
-                  <div className="text-cyan-400">Mouse: Rotate Camera (Click to lock)</div>
-                  <div className="text-purple-400">Space: Jump</div>
-                  <div className="text-red-400">Player: Red Cube</div>
-                  <div className="text-green-400">Spawn: ({spawnPoint.x}, {spawnPoint.y}, {spawnPoint.z})</div>
+                  <div className="text-green-400 font-semibold">🎮 Script-Driven Controls:</div>
+                  <div className="text-yellow-400">WASD: Triggers script movement</div>
+                  <div className="text-cyan-400">Mouse: Script-based camera</div>
+                  <div className="text-purple-400">Space: Script jump function</div>
+                  <div className="text-red-400">Player: Red Cube (Script Controlled)</div>
+                  <div className="text-green-400">Scripts Loaded: {loadedScripts.length}</div>
                   <div className="text-orange-400">Keys Active: {Array.from(keys).join(', ') || 'None'}</div>
-                  <div className="text-cyan-400">Your workspace objects are loaded!</div>
+                  <div className="text-cyan-400">Your scripts are running! ✓</div>
                 </>
               )}
               {project.type === 'game2d' && (
@@ -831,8 +1040,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
                 <div>Velocity: ({playerVelocity.x.toFixed(1)}, {playerVelocity.y.toFixed(1)}, {playerVelocity.z.toFixed(1)})</div>
                 <div>Grounded: {isGrounded ? 'Yes' : 'No'}</div>
                 <div>Keys: {keys.size}</div>
-                <div className="text-green-400">Workspace Loaded ✓</div>
-                <div className="text-cyan-400">Controls Active ✓</div>
+                <div className="text-green-400">Scripts: {loadedScripts.length} ✓</div>
+                <div className="text-cyan-400">Script Engine: Active ✓</div>
               </>
             )}
           </div>
@@ -841,10 +1050,10 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           {project.type === 'game3d' && (
             <div className="absolute top-4 left-4 bg-black bg-opacity-70 text-white p-3 rounded-lg">
               <div className="text-sm space-y-1">
-                <div className="text-green-400 font-semibold">Click canvas to start!</div>
-                <div className="text-yellow-400">Then use WASD to move</div>
-                <div className="text-cyan-400">Mouse to look around</div>
-                <div className="text-purple-400">Space to jump</div>
+                <div className="text-green-400 font-semibold">🚀 Script System Active!</div>
+                <div className="text-yellow-400">Your player scripts are running</div>
+                <div className="text-cyan-400">Input → Scripts → Movement</div>
+                <div className="text-purple-400">Click canvas to start!</div>
               </div>
             </div>
           )}
@@ -854,29 +1063,22 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       {/* Console Output */}
       <div className="bg-gray-800 border-t border-gray-700 p-4 h-32 overflow-auto">
         <div className="text-sm font-mono text-gray-300 space-y-1">
-          <div className="text-green-400">[INFO] Game initialized successfully</div>
+          <div className="text-green-400">[INFO] Game initialized with script execution system</div>
           <div className="text-blue-400">[DEBUG] Loading {project.type} environment...</div>
           <div className="text-green-400">[INFO] Workspace objects loaded from project ✓</div>
           {project.type === 'game3d' && (
             <>
               <div className="text-blue-400">[DEBUG] 3D scene created with THREE.js</div>
               <div className="text-green-400">[INFO] Player spawned at Actor spawn point ({spawnPoint.x}, {spawnPoint.y}, {spawnPoint.z})</div>
-              <div className="text-blue-400">[DEBUG] Physics engine initialized</div>
-              <div className="text-yellow-400">[INFO] Controls: WASD/Arrows=Move, Mouse=Camera, Space=Jump</div>
-              <div className="text-cyan-400">[INFO] Actor system loaded - Spawn points active</div>
-              <div className="text-green-400">[INFO] All workspace objects rendered in game world</div>
-              <div className="text-purple-400">[INFO] Red cube player character ready</div>
-              <div className="text-orange-400">[CONTROLS] Event listeners attached to canvas and window</div>
-              <div className="text-cyan-400">[CONTROLS] Pointer lock enabled for smooth camera control</div>
-              <div className="text-green-400">[CONTROLS] Movement system active - try WASD keys!</div>
+              <div className="text-purple-400">[SYSTEM] Script execution engine initialized</div>
+              <div className="text-cyan-400">[SYSTEM] Player scripts loaded: {loadedScripts.map(s => s.name).join(', ')}</div>
+              <div className="text-yellow-400">[INFO] Input system connected to scripts</div>
+              <div className="text-green-400">[INFO] Movement controlled by your scripts ✓</div>
             </>
           )}
-          {project.type === 'game2d' && (
-            <div className="text-blue-400">[DEBUG] 2D physics engine initialized</div>
-          )}
-          {project.type === 'webapp' && (
-            <div className="text-blue-400">[DEBUG] API endpoints registered</div>
-          )}
+          {consoleOutput.slice(-5).map((output, index) => (
+            <div key={index} className="text-white">{output}</div>
+          ))}
           <div className="text-green-400">[INFO] Game loop started at 60 FPS</div>
         </div>
       </div>

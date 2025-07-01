@@ -24,13 +24,15 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   const [isGrounded, setIsGrounded] = useState(true);
   const [cameraAngle, setCameraAngle] = useState({ horizontal: 0, vertical: 0 });
   const [spawnPoint, setSpawnPoint] = useState({ x: 0, y: 1, z: 0 });
+  const [isMouseLocked, setIsMouseLocked] = useState(false);
 
   useEffect(() => {
     if (!mountRef.current) return;
 
     // Initialize based on project type
     if (project.type === 'game3d') {
-      init3DGame();
+      const cleanup = init3DGame();
+      return cleanup;
     } else if (project.type === 'game2d') {
       render2DGame();
     } else {
@@ -310,7 +312,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Mouse controls for camera
+    // FIXED: Proper mouse controls for camera
     let isMouseDown = false;
     let mouseX = 0;
     let mouseY = 0;
@@ -319,61 +321,121 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       isMouseDown = true;
       mouseX = event.clientX;
       mouseY = event.clientY;
+      
+      // Request pointer lock for better camera control
+      renderer.domElement.requestPointerLock();
     };
 
     const onMouseMove = (event: MouseEvent) => {
-      if (!isMouseDown) return;
+      if (document.pointerLockElement === renderer.domElement) {
+        // Use movementX/Y for smooth camera rotation when pointer is locked
+        const deltaX = event.movementX || 0;
+        const deltaY = event.movementY || 0;
 
-      const deltaX = event.clientX - mouseX;
-      const deltaY = event.clientY - mouseY;
+        setCameraAngle(prev => ({
+          horizontal: prev.horizontal - deltaX * 0.002,
+          vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical - deltaY * 0.002))
+        }));
+      } else if (isMouseDown) {
+        // Fallback for when pointer lock is not available
+        const deltaX = event.clientX - mouseX;
+        const deltaY = event.clientY - mouseY;
 
-      setCameraAngle(prev => ({
-        horizontal: prev.horizontal - deltaX * 0.005,
-        vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical - deltaY * 0.005))
-      }));
+        setCameraAngle(prev => ({
+          horizontal: prev.horizontal - deltaX * 0.005,
+          vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical - deltaY * 0.005))
+        }));
 
-      mouseX = event.clientX;
-      mouseY = event.clientY;
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+      }
     };
 
     const onMouseUp = () => {
       isMouseDown = false;
     };
 
-    // Keyboard controls
+    // FIXED: Proper keyboard controls with event listeners
     const onKeyDown = (event: KeyboardEvent) => {
-      setKeys(prev => new Set(prev).add(event.key.toLowerCase()));
-    };
-
-    const onKeyUp = (event: KeyboardEvent) => {
+      event.preventDefault(); // Prevent default browser behavior
+      const key = event.key.toLowerCase();
+      console.log('[CONTROLS] Key down:', key);
       setKeys(prev => {
         const newKeys = new Set(prev);
-        newKeys.delete(event.key.toLowerCase());
+        newKeys.add(key);
         return newKeys;
       });
     };
 
+    const onKeyUp = (event: KeyboardEvent) => {
+      event.preventDefault();
+      const key = event.key.toLowerCase();
+      console.log('[CONTROLS] Key up:', key);
+      setKeys(prev => {
+        const newKeys = new Set(prev);
+        newKeys.delete(key);
+        return newKeys;
+      });
+    };
+
+    // CRITICAL: Add event listeners to the renderer canvas AND window
     renderer.domElement.addEventListener('mousedown', onMouseDown);
     renderer.domElement.addEventListener('mousemove', onMouseMove);
     renderer.domElement.addEventListener('mouseup', onMouseUp);
+    
+    // Make canvas focusable and focus it
+    renderer.domElement.tabIndex = 0;
+    renderer.domElement.focus();
+    
+    // Add keyboard listeners to both canvas and window for better compatibility
+    renderer.domElement.addEventListener('keydown', onKeyDown);
+    renderer.domElement.addEventListener('keyup', onKeyUp);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    // Game loop
-    const gameLoop = () => {
-      updatePlayer();
+    // Handle pointer lock changes
+    const onPointerLockChange = () => {
+      setIsMouseLocked(document.pointerLockElement === renderer.domElement);
+    };
+    
+    document.addEventListener('pointerlockchange', onPointerLockChange);
+
+    // Game loop with proper timing
+    let lastTime = 0;
+    const gameLoop = (currentTime: number) => {
+      const deltaTime = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
+      
+      updatePlayer(deltaTime);
       updateCamera();
       renderer.render(scene, camera);
       requestAnimationFrame(gameLoop);
     };
-    gameLoop();
+    gameLoop(0);
 
     console.log('[GAME] 3D Game initialized with', scene.children.length, 'objects');
+    console.log('[CONTROLS] Movement: WASD, Camera: Mouse, Jump: Space');
 
     // Cleanup function
     return () => {
+      console.log('[GAME] Cleaning up 3D game...');
+      
+      // Remove event listeners
+      renderer.domElement.removeEventListener('mousedown', onMouseDown);
+      renderer.domElement.removeEventListener('mousemove', onMouseMove);
+      renderer.domElement.removeEventListener('mouseup', onMouseUp);
+      renderer.domElement.removeEventListener('keydown', onKeyDown);
+      renderer.domElement.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      document.removeEventListener('pointerlockchange', onPointerLockChange);
+      
+      // Exit pointer lock
+      if (document.pointerLockElement === renderer.domElement) {
+        document.exitPointerLock();
+      }
+      
+      // Clean up renderer
       if (mountRef.current && renderer.domElement) {
         mountRef.current.removeChild(renderer.domElement);
       }
@@ -381,51 +443,78 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     };
   };
 
-  const updatePlayer = () => {
+  const updatePlayer = (deltaTime: number) => {
     if (!playerRef.current) return;
 
-    const moveSpeed = 0.1;
-    const jumpPower = 0.3;
-    const gravity = -0.02;
+    const moveSpeed = 8; // Units per second
+    const jumpPower = 12;
+    const gravity = -30;
 
-    // Handle movement
+    // Handle movement based on current keys
     let moveX = 0;
     let moveZ = 0;
 
-    if (keys.has('w') || keys.has('arrowup')) moveZ -= moveSpeed;
-    if (keys.has('s') || keys.has('arrowdown')) moveZ += moveSpeed;
-    if (keys.has('a') || keys.has('arrowleft')) moveX -= moveSpeed;
-    if (keys.has('d') || keys.has('arrowright')) moveX += moveSpeed;
+    // Check all possible movement keys
+    if (keys.has('w') || keys.has('arrowup')) {
+      moveZ -= moveSpeed * deltaTime;
+      console.log('[MOVEMENT] Moving forward');
+    }
+    if (keys.has('s') || keys.has('arrowdown')) {
+      moveZ += moveSpeed * deltaTime;
+      console.log('[MOVEMENT] Moving backward');
+    }
+    if (keys.has('a') || keys.has('arrowleft')) {
+      moveX -= moveSpeed * deltaTime;
+      console.log('[MOVEMENT] Moving left');
+    }
+    if (keys.has('d') || keys.has('arrowright')) {
+      moveX += moveSpeed * deltaTime;
+      console.log('[MOVEMENT] Moving right');
+    }
 
     // Apply movement relative to camera direction
-    const cameraDirection = new THREE.Vector3();
-    cameraDirection.x = Math.sin(cameraAngle.horizontal);
-    cameraDirection.z = Math.cos(cameraAngle.horizontal);
+    if (moveX !== 0 || moveZ !== 0) {
+      const cameraDirection = new THREE.Vector3();
+      cameraDirection.x = Math.sin(cameraAngle.horizontal);
+      cameraDirection.z = Math.cos(cameraAngle.horizontal);
 
-    const rightDirection = new THREE.Vector3();
-    rightDirection.x = Math.cos(cameraAngle.horizontal);
-    rightDirection.z = -Math.sin(cameraAngle.horizontal);
+      const rightDirection = new THREE.Vector3();
+      rightDirection.x = Math.cos(cameraAngle.horizontal);
+      rightDirection.z = -Math.sin(cameraAngle.horizontal);
 
-    setPlayerVelocity(prev => ({
-      x: (cameraDirection.x * moveZ + rightDirection.x * moveX),
-      y: prev.y,
-      z: (cameraDirection.z * moveZ + rightDirection.z * moveX)
-    }));
+      const movement = new THREE.Vector3();
+      movement.addScaledVector(cameraDirection, moveZ);
+      movement.addScaledVector(rightDirection, moveX);
+
+      setPlayerVelocity(prev => ({
+        x: movement.x,
+        y: prev.y,
+        z: movement.z
+      }));
+    } else {
+      // Apply friction when not moving
+      setPlayerVelocity(prev => ({
+        x: prev.x * 0.8,
+        y: prev.y,
+        z: prev.z * 0.8
+      }));
+    }
 
     // Handle jumping
     if ((keys.has(' ') || keys.has('space')) && isGrounded) {
+      console.log('[MOVEMENT] Jumping!');
       setPlayerVelocity(prev => ({ ...prev, y: jumpPower }));
       setIsGrounded(false);
     }
 
     // Apply gravity
-    setPlayerVelocity(prev => ({ ...prev, y: prev.y + gravity }));
+    setPlayerVelocity(prev => ({ ...prev, y: prev.y + gravity * deltaTime }));
 
     // Update position
     setPlayerPosition(prev => {
       const newPos = {
         x: prev.x + playerVelocity.x,
-        y: prev.y + playerVelocity.y,
+        y: prev.y + playerVelocity.y * deltaTime,
         z: prev.z + playerVelocity.z
       };
 
@@ -441,13 +530,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
       return newPos;
     });
-
-    // Apply friction
-    setPlayerVelocity(prev => ({
-      x: prev.x * 0.8,
-      y: prev.y,
-      z: prev.z * 0.8
-    }));
   };
 
   const updateCamera = () => {
@@ -668,6 +750,11 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             <span>FPS: {gameStats.fps}</span>
             <span>Objects: {gameStats.objects}</span>
             <span>Memory: {gameStats.memory}</span>
+            {project.type === 'game3d' && (
+              <span className={`${isMouseLocked ? 'text-green-400' : 'text-yellow-400'}`}>
+                Mouse: {isMouseLocked ? 'Locked' : 'Free'}
+              </span>
+            )}
           </div>
           <button
             onClick={resetGame}
@@ -707,11 +794,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
               {project.type === 'game3d' && (
                 <>
                   <div className="text-green-400 font-semibold">3D Game Controls:</div>
-                  <div>WASD / Arrow Keys: Move</div>
-                  <div>Mouse Drag: Rotate Camera</div>
-                  <div>Space: Jump</div>
+                  <div className="text-yellow-400">WASD / Arrow Keys: Move Player</div>
+                  <div className="text-cyan-400">Mouse: Rotate Camera (Click to lock)</div>
+                  <div className="text-purple-400">Space: Jump</div>
                   <div className="text-red-400">Player: Red Cube</div>
                   <div className="text-green-400">Spawn: ({spawnPoint.x}, {spawnPoint.y}, {spawnPoint.z})</div>
+                  <div className="text-orange-400">Keys Active: {Array.from(keys).join(', ') || 'None'}</div>
                   <div className="text-cyan-400">Your workspace objects are loaded!</div>
                 </>
               )}
@@ -740,11 +828,26 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             {project.type === 'game3d' && (
               <>
                 <div>Player: ({playerPosition.x.toFixed(1)}, {playerPosition.y.toFixed(1)}, {playerPosition.z.toFixed(1)})</div>
+                <div>Velocity: ({playerVelocity.x.toFixed(1)}, {playerVelocity.y.toFixed(1)}, {playerVelocity.z.toFixed(1)})</div>
                 <div>Grounded: {isGrounded ? 'Yes' : 'No'}</div>
+                <div>Keys: {keys.size}</div>
                 <div className="text-green-400">Workspace Loaded ✓</div>
+                <div className="text-cyan-400">Controls Active ✓</div>
               </>
             )}
           </div>
+
+          {/* Instructions Overlay for 3D Game */}
+          {project.type === 'game3d' && (
+            <div className="absolute top-4 left-4 bg-black bg-opacity-70 text-white p-3 rounded-lg">
+              <div className="text-sm space-y-1">
+                <div className="text-green-400 font-semibold">Click canvas to start!</div>
+                <div className="text-yellow-400">Then use WASD to move</div>
+                <div className="text-cyan-400">Mouse to look around</div>
+                <div className="text-purple-400">Space to jump</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -763,6 +866,9 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
               <div className="text-cyan-400">[INFO] Actor system loaded - Spawn points active</div>
               <div className="text-green-400">[INFO] All workspace objects rendered in game world</div>
               <div className="text-purple-400">[INFO] Red cube player character ready</div>
+              <div className="text-orange-400">[CONTROLS] Event listeners attached to canvas and window</div>
+              <div className="text-cyan-400">[CONTROLS] Pointer lock enabled for smooth camera control</div>
+              <div className="text-green-400">[CONTROLS] Movement system active - try WASD keys!</div>
             </>
           )}
           {project.type === 'game2d' && (

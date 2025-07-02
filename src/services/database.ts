@@ -320,6 +320,14 @@ class DatabaseService {
       const transaction = this.db!.transaction(['projects'], 'readonly');
       const store = transaction.objectStore('projects');
       const index = store.index('userId');
+      
+      // Additional defensive check right before the IndexedDB call
+      if (userId === null || userId === undefined) {
+        console.warn('userId is null or undefined at IndexedDB call time');
+        resolve([]);
+        return;
+      }
+      
       const request = index.getAll(userId);
 
       request.onsuccess = () => resolve(request.result);

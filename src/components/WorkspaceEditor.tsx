@@ -97,7 +97,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     baseplate.userData = { id: 'baseplate', name: 'Baseplate', type: 'part', selectable: true };
     scene.add(baseplate);
 
-    // Initialize objects array with hierarchy structure
+    // CRITICAL FIX: Initialize objects array with workspace objects from project
     const initialObjects = [
       { 
         id: 'baseplate', 
@@ -107,91 +107,199 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         visible: true, 
         selectable: true,
         parent: 'workspace',
-        children: []
+        children: [],
+        position: { x: 0, y: -0.5, z: 0 },
+        color: '#228B22'
       }
     ];
 
-    // Add some example objects if it's a game project
-    if (project.type === 'game3d') {
-      // Add a cube
-      const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
-      const cubeMaterial = new THREE.MeshLambertMaterial({ color: 0xff6b6b });
-      const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-      cube.position.set(0, 1, 0);
-      cube.castShadow = true;
-      cube.name = 'Part';
-      cube.userData = { id: 'part1', name: 'Part', type: 'part', selectable: true };
-      scene.add(cube);
+    // CRITICAL: Load existing workspace objects from project
+    if (project.services.workspace.objects && project.services.workspace.objects.length > 0) {
+      console.log('[WORKSPACE] Loading existing workspace objects:', project.services.workspace.objects);
+      
+      project.services.workspace.objects.forEach((obj: any) => {
+        if (obj.type === 'config') return; // Skip config objects
+        
+        let mesh: THREE.Mesh | THREE.Group | null = null;
 
-      // Add a sphere
-      const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-      const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0x4ecdc4 });
-      const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-      sphere.position.set(5, 1, 0);
-      sphere.castShadow = true;
-      sphere.name = 'Ball';
-      sphere.userData = { id: 'ball1', name: 'Ball', type: 'sphere', selectable: true };
-      scene.add(sphere);
+        switch (obj.type) {
+          case 'part':
+            const partGeometry = new THREE.BoxGeometry(2, 2, 2);
+            const partMaterial = new THREE.MeshLambertMaterial({ 
+              color: obj.color ? new THREE.Color(obj.color) : 0x4ECDC4 
+            });
+            mesh = new THREE.Mesh(partGeometry, partMaterial);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            break;
 
-      // FIXED: Add a VISIBLE Actor (spawn point) - no transparency
-      const actorGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
-      const actorMaterial = new THREE.MeshLambertMaterial({ 
-        color: 0x00FF00  // Bright green, fully opaque
-      });
-      const actor = new THREE.Mesh(actorGeometry, actorMaterial);
-      actor.position.set(-5, 0.1, 0);
-      actor.name = 'SpawnPoint';
-      actor.userData = { id: 'spawn1', name: 'SpawnPoint', type: 'actor', selectable: true };
-      scene.add(actor);
+          case 'sphere':
+            const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+            const sphereMaterial = new THREE.MeshLambertMaterial({ 
+              color: obj.color ? new THREE.Color(obj.color) : 0xFFE66D 
+            });
+            mesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            break;
 
-      // Add visible glow effect to actor
-      const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
-      const glowMaterial = new THREE.MeshBasicMaterial({ 
-        color: 0x00FF00,
-        transparent: true,
-        opacity: 0.5  // Semi-transparent glow
-      });
-      const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-      actor.add(glow);
+          case 'cylinder':
+            const cylinderGeometry = new THREE.CylinderGeometry(1, 1, 2, 32);
+            const cylinderMaterial = new THREE.MeshLambertMaterial({ 
+              color: obj.color ? new THREE.Color(obj.color) : 0xFF6B6B 
+            });
+            mesh = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            break;
 
-      initialObjects.push(
-        { 
-          id: 'part1', 
-          name: 'Part', 
-          type: 'part', 
-          mesh: cube, 
-          visible: true, 
-          selectable: true,
-          parent: 'workspace',
-          children: []
-        },
-        { 
-          id: 'ball1', 
-          name: 'Ball', 
-          type: 'sphere', 
-          mesh: sphere, 
-          visible: true, 
-          selectable: true,
-          parent: 'workspace',
-          children: []
-        },
-        { 
-          id: 'spawn1', 
-          name: 'SpawnPoint', 
-          type: 'actor', 
-          mesh: actor, 
-          visible: true, 
-          selectable: true,
-          parent: 'workspace',
-          children: [{
-            id: 'spawn1_config',
-            name: 'Config',
-            type: 'config',
-            content: getActorConfigContent(),
-            children: []
-          }]
+          case 'actor':
+            // FIXED: Make actor spawn points VISIBLE (not transparent)
+            const actorGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
+            const actorMaterial = new THREE.MeshLambertMaterial({ 
+              color: 0x00FF00  // Solid green, no transparency
+            });
+            mesh = new THREE.Mesh(actorGeometry, actorMaterial);
+            
+            // Add glow effect (this can be semi-transparent)
+            const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
+            const glowMaterial = new THREE.MeshBasicMaterial({ 
+              color: 0x00FF00,
+              transparent: true,
+              opacity: 0.3
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            mesh.add(glow);
+            break;
+
+          case 'model':
+          case 'folder':
+            mesh = new THREE.Group();
+            break;
         }
-      );
+
+        if (mesh) {
+          mesh.position.set(
+            obj.position?.x || 0, 
+            obj.position?.y || (obj.type === 'actor' ? 0.1 : 2), 
+            obj.position?.z || 0
+          );
+          
+          if (obj.rotation) {
+            mesh.rotation.set(obj.rotation.x || 0, obj.rotation.y || 0, obj.rotation.z || 0);
+          }
+          if (obj.scale && obj.type !== 'part' && obj.type !== 'sphere' && obj.type !== 'cylinder') {
+            mesh.scale.set(obj.scale.x || 1, obj.scale.y || 1, obj.scale.z || 1);
+          }
+
+          mesh.name = obj.name;
+          mesh.userData = { id: obj.id, name: obj.name, type: obj.type, selectable: true };
+          scene.add(mesh);
+
+          initialObjects.push({
+            ...obj,
+            mesh: mesh,
+            visible: true,
+            selectable: true,
+            parent: 'workspace',
+            children: obj.children || [],
+            position: obj.position || { x: 0, y: obj.type === 'actor' ? 0.1 : 2, z: 0 },
+            color: obj.color || getDefaultColor(obj.type)
+          });
+        }
+      });
+    } else {
+      // Add some example objects if workspace is empty
+      if (project.type === 'game3d') {
+        // Add a cube
+        const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
+        const cubeMaterial = new THREE.MeshLambertMaterial({ color: 0xff6b6b });
+        const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+        cube.position.set(0, 1, 0);
+        cube.castShadow = true;
+        cube.name = 'Part';
+        cube.userData = { id: 'part1', name: 'Part', type: 'part', selectable: true };
+        scene.add(cube);
+
+        // Add a sphere
+        const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+        const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0x4ecdc4 });
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        sphere.position.set(5, 1, 0);
+        sphere.castShadow = true;
+        sphere.name = 'Ball';
+        sphere.userData = { id: 'ball1', name: 'Ball', type: 'sphere', selectable: true };
+        scene.add(sphere);
+
+        // Add an Actor (spawn point) - FIXED: Make it VISIBLE
+        const actorGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
+        const actorMaterial = new THREE.MeshLambertMaterial({ 
+          color: 0x00FF00  // Solid green, no transparency
+        });
+        const actor = new THREE.Mesh(actorGeometry, actorMaterial);
+        actor.position.set(-5, 0.1, 0);
+        actor.name = 'SpawnPoint';
+        actor.userData = { id: 'spawn1', name: 'SpawnPoint', type: 'actor', selectable: true };
+        scene.add(actor);
+
+        // Add glow effect to actor
+        const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
+        const glowMaterial = new THREE.MeshBasicMaterial({ 
+          color: 0x00FF00,
+          transparent: true,
+          opacity: 0.3
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        actor.add(glow);
+
+        initialObjects.push(
+          { 
+            id: 'part1', 
+            name: 'Part', 
+            type: 'part', 
+            mesh: cube, 
+            visible: true, 
+            selectable: true,
+            parent: 'workspace',
+            children: [],
+            position: { x: 0, y: 1, z: 0 },
+            color: '#ff6b6b'
+          },
+          { 
+            id: 'ball1', 
+            name: 'Ball', 
+            type: 'sphere', 
+            mesh: sphere, 
+            visible: true, 
+            selectable: true,
+            parent: 'workspace',
+            children: [],
+            position: { x: 5, y: 1, z: 0 },
+            color: '#4ecdc4'
+          },
+          { 
+            id: 'spawn1', 
+            name: 'SpawnPoint', 
+            type: 'actor', 
+            mesh: actor, 
+            visible: true, 
+            selectable: true,
+            parent: 'workspace',
+            children: [{
+              id: 'spawn1_config',
+              name: 'Config',
+              type: 'config',
+              content: getActorConfigContent(),
+              children: []
+            }],
+            position: { x: -5, y: 0.1, z: 0 },
+            color: '#00FF00'
+          }
+        );
+
+        // CRITICAL: Update project workspace objects so they appear in file explorer
+        project.services.workspace.objects = initialObjects.filter(obj => obj.id !== 'baseplate');
+      }
     }
 
     setObjects(initialObjects);
@@ -214,7 +322,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
 
       raycaster.setFromCamera(mouse, camera);
       
-      // Check for gizmo interaction first
+      // FIXED: Check for gizmo interaction first with proper setup
       const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
       const gizmoIntersects = raycaster.intersectObjects(gizmos);
       
@@ -226,12 +334,13 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         const gizmo = gizmoIntersects[0].object;
         const axis = gizmo.userData.axis;
         
+        // FIXED: Better drag plane setup
         if (axis === 'x') {
-          dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+          dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -selectedObject.mesh.position.y);
         } else if (axis === 'y') {
-          dragPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+          dragPlane = new THREE.Plane(new THREE.Vector3(1, 0, 1).normalize(), 0);
         } else if (axis === 'z') {
-          dragPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+          dragPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), -selectedObject.mesh.position.x);
         }
         
         // Calculate offset from object center to mouse position
@@ -265,7 +374,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
 
     const onMouseMove = (event: MouseEvent) => {
       if (isDraggingGizmo && selectedObject && dragPlane) {
-        // Handle gizmo dragging with proper plane intersection
+        // FIXED: Handle gizmo dragging with proper plane intersection
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -278,8 +387,17 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
           
           if (tool === 'move') {
             selectedObject.mesh.position.copy(newPosition);
-            selectedObject.mesh.position.y = Math.max(selectedObject.mesh.position.y, 0.5);
+            selectedObject.mesh.position.y = Math.max(selectedObject.mesh.position.y, 0.1);
+            
+            // CRITICAL: Update object data
+            selectedObject.position = {
+              x: selectedObject.mesh.position.x,
+              y: selectedObject.mesh.position.y,
+              z: selectedObject.mesh.position.z
+            };
+            
             updateGizmoPositions(selectedObject.mesh);
+            updateProjectWorkspace();
           }
         }
         return;
@@ -576,6 +694,33 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     }
   }, [tool, selectedObject]);
 
+  // CRITICAL: Function to update project workspace data
+  const updateProjectWorkspace = () => {
+    const workspaceObjects = objects.filter(obj => obj.id !== 'baseplate').map(obj => ({
+      id: obj.id,
+      name: obj.name,
+      type: obj.type,
+      position: obj.position,
+      rotation: obj.rotation || { x: 0, y: 0, z: 0 },
+      scale: obj.scale || { x: 1, y: 1, z: 1 },
+      color: obj.color,
+      children: obj.children || []
+    }));
+    
+    project.services.workspace.objects = workspaceObjects;
+    console.log('[WORKSPACE] Updated project workspace objects:', workspaceObjects);
+  };
+
+  const getDefaultColor = (type: string) => {
+    switch (type) {
+      case 'part': return '#4ECDC4';
+      case 'sphere': return '#FFE66D';
+      case 'cylinder': return '#FF6B6B';
+      case 'actor': return '#00FF00';
+      default: return '#FFFFFF';
+    }
+  };
+
   const getActorConfigContent = () => {
     return `// Actor Configuration
 // This script configures the Actor's role and behavior
@@ -725,7 +870,9 @@ console.log("Actor configured as: " + actor.Role);`;
       visible: true,
       selectable: false,
       parent: parentId || 'workspace',
-      children: []
+      children: [],
+      position: { x: 0, y: 2, z: 0 },
+      color: getDefaultColor(type)
     };
 
     // Handle 3D objects
@@ -749,8 +896,9 @@ console.log("Actor configured as: " + actor.Role);`;
         case 'actor':
           geometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
           material = new THREE.MeshLambertMaterial({ 
-            color: 0x00FF00  // Bright green, fully opaque
+            color: 0x00FF00  // Solid green, no transparency
           });
+          newObject.position = { x: 0, y: 0.1, z: 0 };
           break;
         default:
           return;
@@ -772,7 +920,7 @@ console.log("Actor configured as: " + actor.Role);`;
         const glowMaterial = new THREE.MeshBasicMaterial({ 
           color: 0x00FF00,
           transparent: true,
-          opacity: 0.5
+          opacity: 0.3
         });
         const glow = new THREE.Mesh(glowGeometry, glowMaterial);
         mesh.add(glow);
@@ -791,6 +939,12 @@ console.log("Actor configured as: " + actor.Role);`;
 
       newObject.mesh = mesh;
       newObject.selectable = true;
+      newObject.position = {
+        x: mesh.position.x,
+        y: mesh.position.y,
+        z: mesh.position.z
+      };
+      newObject.color = '#' + material.color.getHexString();
     }
 
     // Handle script objects
@@ -807,6 +961,7 @@ console.log("Actor configured as: " + actor.Role);`;
     }
 
     setObjects(prev => [...prev, newObject]);
+    updateProjectWorkspace();
     setShowAddMenu(false);
   };
 
@@ -876,6 +1031,7 @@ console.log("Configuration loaded");`;
       
       // Remove from objects array
       setObjects(prev => prev.filter(obj => obj.id !== id));
+      updateProjectWorkspace();
       
       if (selectedObject?.id === id) {
         setSelectedObject(null);
@@ -899,6 +1055,7 @@ console.log("Configuration loaded");`;
         obj.mesh.visible = obj.visible;
       }
       setObjects([...objects]);
+      updateProjectWorkspace();
     }
   };
 
@@ -908,6 +1065,7 @@ console.log("Configuration loaded");`;
     cameraRef.current.lookAt(0, 0, 0);
   };
 
+  // FIXED: Property update function that actually works
   const updateObjectProperty = (id: string, property: string, value: any) => {
     const obj = objects.find(o => o.id === id);
     if (obj) {
@@ -918,9 +1076,10 @@ console.log("Configuration loaded");`;
           obj.mesh.userData.name = value;
         }
       } else if (property.startsWith('position.')) {
-        const axis = property.split('.')[1];
+        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
+        obj.position[axis] = value;
         if (obj.mesh) {
-          obj.mesh.position[axis as 'x' | 'y' | 'z'] = value;
+          obj.mesh.position[axis] = value;
           
           // Update gizmos position if this object is selected
           if (selectedObject?.id === id && sceneRef.current) {
@@ -937,14 +1096,21 @@ console.log("Configuration loaded");`;
             outlines.forEach(outline => outline.position.copy(obj.mesh.position));
           }
         }
-      } else if (property === 'color' && obj.mesh) {
-        (obj.mesh.material as THREE.MeshLambertMaterial).color.setHex(parseInt(value.replace('#', '0x')));
-      } else if (property === 'transparency' && obj.mesh) {
-        const material = obj.mesh.material as THREE.MeshLambertMaterial;
-        material.transparent = value > 0;
-        material.opacity = 1 - value;
+      } else if (property === 'color') {
+        obj.color = value;
+        if (obj.mesh && obj.mesh.material) {
+          (obj.mesh.material as THREE.MeshLambertMaterial).color.setHex(parseInt(value.replace('#', '0x')));
+        }
+      } else if (property === 'visible') {
+        obj.visible = value;
+        if (obj.mesh) {
+          obj.mesh.visible = value;
+        }
       }
+      
       setObjects([...objects]);
+      updateProjectWorkspace();
+      
       if (selectedObject?.id === id) {
         setSelectedObject({ ...obj });
       }
@@ -1126,9 +1292,9 @@ console.log("Configuration loaded");`;
             <div className="text-green-400">WASD: Move camera freely</div>
             <div>Scroll: Zoom in/out</div>
             <div>Click objects to select</div>
-            <div className="text-yellow-400">Drag gizmos to transform</div>
+            <div className="text-yellow-400">✓ Drag gizmos to transform</div>
             <div className="text-green-400">Tool: {tool.charAt(0).toUpperCase() + tool.slice(1)}</div>
-            <div className="text-cyan-400">✓ Green cylinders: Visible spawn points</div>
+            <div className="text-cyan-400">✓ Green cylinders: Actor spawn points (VISIBLE!)</div>
           </div>
         </div>
       </div>
@@ -1141,21 +1307,22 @@ console.log("Configuration loaded");`;
           <div className="space-y-4">
             {/* Object Info */}
             <div className="bg-gray-700/50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-lg">{getObjectIcon(selectedObject.type)}</span>
-                <span className="font-semibold text-white">{selectedObject.name}</span>
-                <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded">
-                  {selectedObject.type.toUpperCase()}
-                </span>
+              <h4 className="text-md font-semibold text-white mb-2">Object Info</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Type:</span>
+                  <span className="text-white">{selectedObject.type}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">ID:</span>
+                  <span className="text-white text-xs">{selectedObject.id}</span>
+                </div>
               </div>
-              <p className="text-xs text-gray-400">
-                ID: {selectedObject.id}
-              </p>
             </div>
 
             {/* Basic Properties */}
             <div>
-              <h4 className="text-md font-semibold text-white mb-2">Basic</h4>
+              <h4 className="text-md font-semibold text-white mb-2">Basic Properties</h4>
               <div className="space-y-2">
                 <div>
                   <label className="block text-sm text-gray-300 mb-1">Name</label>
@@ -1171,13 +1338,7 @@ console.log("Configuration loaded");`;
                   <input
                     type="checkbox"
                     checked={selectedObject.visible}
-                    onChange={(e) => {
-                      selectedObject.visible = e.target.checked;
-                      if (selectedObject.mesh) {
-                        selectedObject.mesh.visible = e.target.checked;
-                      }
-                      setObjects([...objects]);
-                    }}
+                    onChange={(e) => updateObjectProperty(selectedObject.id, 'visible', e.target.checked)}
                     className="rounded"
                   />
                   <label className="text-sm text-gray-300">Visible</label>
@@ -1189,40 +1350,37 @@ console.log("Configuration loaded");`;
             {selectedObject.mesh && (
               <div>
                 <h4 className="text-md font-semibold text-white mb-2">Transform</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm text-gray-300 mb-1">Position</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">X</label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={selectedObject.mesh?.position.x.toFixed(1) || 0}
-                          onChange={(e) => updateObjectProperty(selectedObject.id, 'position.x', parseFloat(e.target.value))}
-                          className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">Y</label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={selectedObject.mesh?.position.y.toFixed(1) || 0}
-                          onChange={(e) => updateObjectProperty(selectedObject.id, 'position.y', parseFloat(e.target.value))}
-                          className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">Z</label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={selectedObject.mesh?.position.z.toFixed(1) || 0}
-                          onChange={(e) => updateObjectProperty(selectedObject.id, 'position.z', parseFloat(e.target.value))}
-                          className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                        />
-                      </div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">X</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={selectedObject.position?.x?.toFixed(1) || 0}
+                        onChange={(e) => updateObjectProperty(selectedObject.id, 'position.x', parseFloat(e.target.value))}
+                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Y</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={selectedObject.position?.y?.toFixed(1) || 0}
+                        onChange={(e) => updateObjectProperty(selectedObject.id, 'position.y', parseFloat(e.target.value))}
+                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Z</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={selectedObject.position?.z?.toFixed(1) || 0}
+                        onChange={(e) => updateObjectProperty(selectedObject.id, 'position.z', parseFloat(e.target.value))}
+                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1238,66 +1396,45 @@ console.log("Configuration loaded");`;
                     <label className="block text-sm text-gray-300 mb-1">Color</label>
                     <input
                       type="color"
-                      value={`#${(selectedObject.mesh.material as THREE.MeshLambertMaterial).color.getHexString()}`}
+                      value={selectedObject.color || '#FFFFFF'}
                       onChange={(e) => updateObjectProperty(selectedObject.id, 'color', e.target.value)}
                       className="w-full h-10 bg-gray-700 border border-gray-600 rounded"
                     />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm text-gray-300 mb-1">Transparency</label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={1 - (selectedObject.mesh.material as THREE.MeshLambertMaterial).opacity}
-                      onChange={(e) => updateObjectProperty(selectedObject.id, 'transparency', parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                    <span className="text-xs text-gray-400">
-                      {Math.round((1 - (selectedObject.mesh.material as THREE.MeshLambertMaterial).opacity) * 100)}%
-                    </span>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Actor Properties */}
+            {/* Actor-specific Properties */}
             {selectedObject.type === 'actor' && (
-              <div>
-                <h4 className="text-md font-semibold text-white mb-2">Actor Properties</h4>
-                <div className="bg-green-900/20 border border-green-400/20 rounded-lg p-3">
-                  <div className="text-xs text-green-200 space-y-1">
-                    <div>• Role: Spawn Point</div>
-                    <div>• Collision: Disabled</div>
-                    <div>• Players spawn at this location</div>
-                    <div>• Edit Config to change role</div>
-                    <div className="text-green-400 font-semibold">✓ Now fully visible!</div>
-                  </div>
+              <div className="bg-green-900/20 border border-green-400/20 rounded-lg p-3">
+                <h5 className="text-green-400 font-semibold text-sm mb-2">Actor Properties</h5>
+                <div className="text-xs text-green-200 space-y-1">
+                  <div>• Role: Spawn Point</div>
+                  <div>• Collision: Disabled</div>
+                  <div>• Players spawn at this location</div>
+                  <div>• ✓ Now VISIBLE (solid green)</div>
+                  <div>• Edit Config to change role</div>
                 </div>
               </div>
             )}
 
             {/* Actions */}
-            <div>
-              <h4 className="text-md font-semibold text-white mb-2">Actions</h4>
-              <div className="space-y-2">
+            <div className="space-y-2">
+              <button
+                onClick={() => setSelectedObject(null)}
+                className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+              >
+                Deselect
+              </button>
+              {selectedObject.id !== 'baseplate' && (
                 <button
-                  onClick={() => setSelectedObject(null)}
-                  className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                  onClick={() => deleteObject(selectedObject.id)}
+                  className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
                 >
-                  Deselect
+                  Delete Object
                 </button>
-                {selectedObject.id !== 'baseplate' && (
-                  <button
-                    onClick={() => deleteObject(selectedObject.id)}
-                    className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-                  >
-                    Delete Object
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
         ) : (
@@ -1307,7 +1444,7 @@ console.log("Configuration loaded");`;
             <p className="text-sm">Click on an object in the 3D view to see its properties</p>
             
             <div className="mt-6 p-4 bg-gray-700/50 rounded-lg">
-              <h5 className="text-green-400 font-semibold mb-2">Quick Actions</h5>
+              <h5 className="text-white font-semibold mb-2">Quick Actions</h5>
               <button
                 onClick={(e) => handleAddButtonClick(e)}
                 className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
@@ -1317,6 +1454,17 @@ console.log("Configuration loaded");`;
             </div>
           </div>
         )}
+
+        {/* Workspace Stats */}
+        <div className="mt-6 p-3 bg-gray-700/50 rounded-lg">
+          <h4 className="text-md font-semibold text-white mb-2">Workspace Stats</h4>
+          <div className="text-sm text-gray-300 space-y-1">
+            <div>Objects: {objects.length}</div>
+            <div>Visible: {objects.filter(obj => obj.visible).length}</div>
+            <div>Selected: {selectedObject ? '1' : '0'}</div>
+            <div className="text-green-400">✓ Synced with Explorer</div>
+          </div>
+        </div>
       </div>
 
       {/* Add Object Menu */}

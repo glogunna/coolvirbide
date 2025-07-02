@@ -89,7 +89,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             type: project.type === 'game3d' ? 'workspace3d' : project.type === 'game2d' ? 'workspace2d' : 'workspace',
             icon: <Box className="w-4 h-4 text-indigo-400" />
           },
-          // CRITICAL FIX: Add ALL workspace objects directly here so they appear in the game
+          // CRITICAL FIX: Add ALL workspace objects directly here so they appear in the explorer AND game
           ...project.services.workspace.objects.map((obj: any) => ({
             ...obj,
             icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : 
@@ -234,7 +234,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
     }
 
     return services;
-  }
+  };
 
   const [services, setServices] = useState(() => buildServicesFromProject());
 
@@ -289,7 +289,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
       current.children.push(newObject);
       setServices(updatedServices);
       
-      // CRITICAL: Update the project data so the game preview can see the new objects
+      // CRITICAL: Update the project data so the workspace editor and game preview can see the new objects
       updateProjectData(updatedServices);
     }
 
@@ -303,6 +303,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
       // Filter out the workspace-view item and update the project
       const workspaceObjects = workspaceService.children.filter((child: any) => child.id !== 'workspace-view');
       project.services.workspace.objects = workspaceObjects;
+      console.log('[EXPLORER] Updated project workspace objects:', workspaceObjects);
     }
   };
 

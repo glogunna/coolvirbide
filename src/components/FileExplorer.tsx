@@ -89,7 +89,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             type: project.type === 'game3d' ? 'workspace3d' : project.type === 'game2d' ? 'workspace2d' : 'workspace',
             icon: <Box className="w-4 h-4 text-indigo-400" />
           },
-          // Add ALL workspace objects directly here - this is the key fix!
+          // CRITICAL FIX: Add ALL workspace objects directly here so they appear in the game
           ...project.services.workspace.objects.map((obj: any) => ({
             ...obj,
             icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : 
@@ -307,88 +307,88 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
   };
 
   const getActorConfigContent = () => {
-    return `-- Actor Configuration
--- This script configures the Actor's role and behavior
+    return `// Actor Configuration
+// This script configures the Actor's role and behavior
 
-inst actor = script.Parent
+const actor = inst('script.Parent');
 
--- Actor Role Configuration
-actor.Role = "SpawnPoint"  -- Options: "SpawnPoint", "NPC", "Collectible", "Trigger", "Enemy"
+// Actor Role Configuration
+actor.Role = "SpawnPoint";  // Options: "SpawnPoint", "NPC", "Collectible", "Trigger", "Enemy"
 
--- Spawn Point Properties (when Role = "SpawnPoint")
+// Spawn Point Properties (when Role = "SpawnPoint")
 actor.SpawnPoint = {
-    IsDefault = true,        -- Is this the default spawn point?
-    Team = "All",           -- Which team can spawn here? ("All", "Red", "Blue", etc.)
-    RespawnTime = 0,        -- Delay before respawn (seconds)
-    MaxPlayers = 1          -- Max players that can spawn here simultaneously
-}
+    IsDefault: true,        // Is this the default spawn point?
+    Team: "All",           // Which team can spawn here? ("All", "Red", "Blue", etc.)
+    RespawnTime: 0,        // Delay before respawn (seconds)
+    MaxPlayers: 1          // Max players that can spawn here simultaneously
+};
 
--- Physical Properties
-actor.Collision = false     -- Set to false so players can pass through
-actor.Transparency = 0.5     -- Make it semi-transparent
-actor.Color = "Green"        -- Visual indicator color
+// Physical Properties
+actor.Collision = false;     // Set to false so players can pass through
+actor.Transparency = 0.5;     // Make it semi-transparent
+actor.Color = "Green";        // Visual indicator color
 
--- NPC Properties (when Role = "NPC")
+// NPC Properties (when Role = "NPC")
 actor.NPC = {
-    Health = 100,
-    WalkSpeed = 8,
-    Dialogue = "Hello, welcome to the game!",
-    Hostile = false
-}
+    Health: 100,
+    WalkSpeed: 8,
+    Dialogue: "Hello, welcome to the game!",
+    Hostile: false
+};
 
--- Collectible Properties (when Role = "Collectible")
+// Collectible Properties (when Role = "Collectible")
 actor.Collectible = {
-    Value = 10,             -- Points/coins awarded
-    RespawnTime = 30,       -- Time to respawn after collection
-    Sound = "CoinPickup"    -- Sound to play when collected
-}
+    Value: 10,             // Points/coins awarded
+    RespawnTime: 30,       // Time to respawn after collection
+    Sound: "CoinPickup"    // Sound to play when collected
+};
 
--- Trigger Properties (when Role = "Trigger")
+// Trigger Properties (when Role = "Trigger")
 actor.Trigger = {
-    TriggerDistance = 5,    -- Distance to activate
-    OneTime = false,        -- Can only be triggered once?
-    Action = "OpenDoor"     -- What happens when triggered
-}
+    TriggerDistance: 5,    // Distance to activate
+    OneTime: false,        // Can only be triggered once?
+    Action: "OpenDoor"     // What happens when triggered
+};
 
--- Functions
-function actor.OnPlayerTouch(player)
-    if actor.Role == "SpawnPoint" then
-        -- Handle spawn point logic
-        print("Player " + player.Name + " touched spawn point")
-    elseif actor.Role == "Collectible" then
-        -- Handle collectible logic
-        player.Score = player.Score + actor.Collectible.Value
-        actor.Visible = false
-        -- Respawn after delay
-        wait(actor.Collectible.RespawnTime)
-        actor.Visible = true
-    elseif actor.Role == "Trigger" then
-        -- Handle trigger logic
-        print("Trigger activated by " + player.Name)
-        -- Execute trigger action
-    end
-end
+// Functions
+actor.OnPlayerTouch = function(player) {
+    if (actor.Role === "SpawnPoint") {
+        // Handle spawn point logic
+        console.log("Player " + player.Name + " touched spawn point");
+    } else if (actor.Role === "Collectible") {
+        // Handle collectible logic
+        player.Score = player.Score + actor.Collectible.Value;
+        actor.Visible = false;
+        // Respawn after delay
+        wait(actor.Collectible.RespawnTime);
+        actor.Visible = true;
+    } else if (actor.Role === "Trigger") {
+        // Handle trigger logic
+        console.log("Trigger activated by " + player.Name);
+        // Execute trigger action
+    }
+};
 
-function actor.SetRole(newRole)
-    actor.Role = newRole
-    print("Actor role changed to: " + newRole)
-end
+actor.SetRole = function(newRole) {
+    actor.Role = newRole;
+    console.log("Actor role changed to: " + newRole);
+};
 
-function actor.GetSpawnPosition()
-    if actor.Role == "SpawnPoint" then
-        return actor.Position
-    end
-    return nil
-end
+actor.GetSpawnPosition = function() {
+    if (actor.Role === "SpawnPoint") {
+        return actor.Position;
+    }
+    return null;
+};
 
--- Events
-actor.PlayerTouched = game.CreateEvent()
-actor.RoleChanged = game.CreateEvent()
+// Events
+actor.PlayerTouched = game.CreateEvent();
+actor.RoleChanged = game.CreateEvent();
 
--- Connect events
-actor.OnTouch:Connect(actor.OnPlayerTouch)
+// Connect events
+actor.OnTouch.Connect(actor.OnPlayerTouch);
 
-print("Actor configured as: " + actor.Role)`;
+console.log("Actor configured as: " + actor.Role);`;
   };
 
   const moveObject = (sourceItem: any, targetParentPath: string[]) => {
@@ -456,24 +456,24 @@ print("Actor configured as: " + actor.Role)`;
     switch (type) {
       case 'vscript':
         return `// Basic Script (Server)
-print("Basic script loaded")
+console.log("Basic script loaded");
 
-function onPlayerJoin(player)
-    print("Player joined: " + player.name)
-end
+function onPlayerJoin(player) {
+    console.log("Player joined: " + player.name);
+}
 
-game.onPlayerJoin(onPlayerJoin)`;
+game.onPlayerJoin(onPlayerJoin);`;
       case 'vlscript':
         return `// Home Script (Client)
-print("Home script loaded")
+console.log("Home script loaded");
 
-inst player = game.Players.LocalPlayer
+const player = inst('game.Players.LocalPlayer');
 
-function onKeyPress(key)
-    print("Key pressed: " + key)
-end
+function onKeyPress(key) {
+    console.log("Key pressed: " + key);
+}
 
-game.InputService.onKeyPress(onKeyPress)`;
+game.InputService.onKeyPress(onKeyPress);`;
       case 'vdata':
         return `-- Database Script
 CREATE TABLE IF NOT EXISTS data (
@@ -483,18 +483,18 @@ CREATE TABLE IF NOT EXISTS data (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-function getData(id)
+function getData(id) {
     SELECT * FROM data WHERE id = id;
-end`;
+}`;
       case 'config':
-        return `-- Configuration
-inst parent = script.Parent
+        return `// Configuration
+const parent = inst('script.Parent');
 
-parent.Health = 100
-parent.MaxHealth = 100
-parent.Speed = 16
+parent.Health = 100;
+parent.MaxHealth = 100;
+parent.Speed = 16;
 
-print("Configuration loaded")`;
+console.log("Configuration loaded");`;
       case 'actor':
         return null; // Actor content is handled by its config
       default:
@@ -806,6 +806,7 @@ print("Configuration loaded")`;
           <div>• <span className="text-blue-300">Ploid</span> - Character controller</div>
           <div>• <span className="text-green-300">Actor</span> - Interactive game object</div>
           <div>• <span className="text-purple-300">Drag & Drop</span> - Reparent objects</div>
+          <div>• <span className="text-cyan-300">✓ Workspace objects appear in game!</span></div>
         </div>
       </div>
 

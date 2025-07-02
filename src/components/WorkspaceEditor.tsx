@@ -133,12 +133,10 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       sphere.userData = { id: 'ball1', name: 'Ball', type: 'sphere', selectable: true };
       scene.add(sphere);
 
-      // Add an Actor (spawn point)
+      // FIXED: Add a VISIBLE Actor (spawn point) - no transparency
       const actorGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
       const actorMaterial = new THREE.MeshLambertMaterial({ 
-        color: 0x00FF00,
-        transparent: true,
-        opacity: 0.7
+        color: 0x00FF00  // Bright green, fully opaque
       });
       const actor = new THREE.Mesh(actorGeometry, actorMaterial);
       actor.position.set(-5, 0.1, 0);
@@ -146,12 +144,12 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       actor.userData = { id: 'spawn1', name: 'SpawnPoint', type: 'actor', selectable: true };
       scene.add(actor);
 
-      // Add glow effect to actor
+      // Add visible glow effect to actor
       const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
       const glowMaterial = new THREE.MeshBasicMaterial({ 
         color: 0x00FF00,
         transparent: true,
-        opacity: 0.3
+        opacity: 0.5  // Semi-transparent glow
       });
       const glow = new THREE.Mesh(glowGeometry, glowMaterial);
       actor.add(glow);
@@ -579,28 +577,28 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
   }, [tool, selectedObject]);
 
   const getActorConfigContent = () => {
-    return `-- Actor Configuration
--- This script configures the Actor's role and behavior
+    return `// Actor Configuration
+// This script configures the Actor's role and behavior
 
-inst actor = script.Parent
+const actor = inst('script.Parent');
 
--- Actor Role Configuration
-actor.Role = "SpawnPoint"  -- Options: "SpawnPoint", "NPC", "Collectible", "Trigger", "Enemy"
+// Actor Role Configuration
+actor.Role = "SpawnPoint";  // Options: "SpawnPoint", "NPC", "Collectible", "Trigger", "Enemy"
 
--- Spawn Point Properties (when Role = "SpawnPoint")
+// Spawn Point Properties (when Role = "SpawnPoint")
 actor.SpawnPoint = {
-    IsDefault = true,        -- Is this the default spawn point?
-    Team = "All",           -- Which team can spawn here? ("All", "Red", "Blue", etc.)
-    RespawnTime = 0,        -- Delay before respawn (seconds)
-    MaxPlayers = 1          -- Max players that can spawn here simultaneously
-}
+    IsDefault: true,        // Is this the default spawn point?
+    Team: "All",           // Which team can spawn here? ("All", "Red", "Blue", etc.)
+    RespawnTime: 0,        // Delay before respawn (seconds)
+    MaxPlayers: 1          // Max players that can spawn here simultaneously
+};
 
--- Physical Properties
-actor.Collision = false     -- Set to false so players can pass through
-actor.Transparency = 0.5     -- Make it semi-transparent
-actor.Color = "Green"        -- Visual indicator color
+// Physical Properties
+actor.Collision = false;     // Set to false so players can pass through
+actor.Transparency = 0.5;     // Make it semi-transparent
+actor.Color = "Green";        // Visual indicator color
 
-print("Actor configured as: " + actor.Role)`;
+console.log("Actor configured as: " + actor.Role);`;
   };
 
   const addMoveGizmos = (object: THREE.Object3D) => {
@@ -751,9 +749,7 @@ print("Actor configured as: " + actor.Role)`;
         case 'actor':
           geometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
           material = new THREE.MeshLambertMaterial({ 
-            color: 0x00FF00,
-            transparent: true,
-            opacity: 0.7
+            color: 0x00FF00  // Bright green, fully opaque
           });
           break;
         default:
@@ -776,7 +772,7 @@ print("Actor configured as: " + actor.Role)`;
         const glowMaterial = new THREE.MeshBasicMaterial({ 
           color: 0x00FF00,
           transparent: true,
-          opacity: 0.3
+          opacity: 0.5
         });
         const glow = new THREE.Mesh(glowGeometry, glowMaterial);
         mesh.add(glow);
@@ -818,24 +814,24 @@ print("Actor configured as: " + actor.Role)`;
     switch (type) {
       case 'vscript':
         return `// Basic Script (Server)
-print("Basic script loaded")
+console.log("Basic script loaded");
 
-function onPlayerJoin(player)
-    print("Player joined: " + player.name)
-end
+function onPlayerJoin(player) {
+    console.log("Player joined: " + player.name);
+}
 
-game.onPlayerJoin(onPlayerJoin)`;
+game.onPlayerJoin(onPlayerJoin);`;
       case 'vlscript':
         return `// Home Script (Client)
-print("Home script loaded")
+console.log("Home script loaded");
 
-inst player = game.Players.LocalPlayer
+const player = inst('game.Players.LocalPlayer');
 
-function onKeyPress(key)
-    print("Key pressed: " + key)
-end
+function onKeyPress(key) {
+    console.log("Key pressed: " + key);
+}
 
-game.InputService.onKeyPress(onKeyPress)`;
+game.InputService.onKeyPress(onKeyPress);`;
       case 'vdata':
         return `-- Database Script
 CREATE TABLE IF NOT EXISTS data (
@@ -845,18 +841,18 @@ CREATE TABLE IF NOT EXISTS data (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-function getData(id)
+function getData(id) {
     SELECT * FROM data WHERE id = id;
-end`;
+}`;
       case 'config':
-        return `-- Configuration
-inst parent = script.Parent
+        return `// Configuration
+const parent = inst('script.Parent');
 
-parent.Health = 100
-parent.MaxHealth = 100
-parent.Speed = 16
+parent.Health = 100;
+parent.MaxHealth = 100;
+parent.Speed = 16;
 
-print("Configuration loaded")`;
+console.log("Configuration loaded");`;
       default:
         return '// New script';
     }
@@ -941,6 +937,12 @@ print("Configuration loaded")`;
             outlines.forEach(outline => outline.position.copy(obj.mesh.position));
           }
         }
+      } else if (property === 'color' && obj.mesh) {
+        (obj.mesh.material as THREE.MeshLambertMaterial).color.setHex(parseInt(value.replace('#', '0x')));
+      } else if (property === 'transparency' && obj.mesh) {
+        const material = obj.mesh.material as THREE.MeshLambertMaterial;
+        material.transparent = value > 0;
+        material.opacity = 1 - value;
       }
       setObjects([...objects]);
       if (selectedObject?.id === id) {
@@ -1126,35 +1128,34 @@ print("Configuration loaded")`;
             <div>Click objects to select</div>
             <div className="text-yellow-400">Drag gizmos to transform</div>
             <div className="text-green-400">Tool: {tool.charAt(0).toUpperCase() + tool.slice(1)}</div>
-            <div className="text-cyan-400">Green cylinders: Actor spawn points</div>
+            <div className="text-cyan-400">✓ Green cylinders: Visible spawn points</div>
           </div>
         </div>
       </div>
 
-      {/* Properties Panel */}
+      {/* FIXED: Properties Panel instead of Scene Objects */}
       <div className="w-80 bg-gray-800 border-l border-gray-700 p-4">
-        <h3 className="text-lg font-semibold text-white mb-4">Workspace</h3>
+        <h3 className="text-lg font-semibold text-white mb-4">Properties</h3>
         
-        <div className="space-y-4">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-md font-semibold text-white">Scene Objects ({objects.length})</h4>
-              <button
-                onClick={(e) => handleAddButtonClick(e)}
-                className="p-1 bg-green-600 hover:bg-green-700 rounded"
-                title="Add Object"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
+        {selectedObject ? (
+          <div className="space-y-4">
+            {/* Object Info */}
+            <div className="bg-gray-700/50 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">{getObjectIcon(selectedObject.type)}</span>
+                <span className="font-semibold text-white">{selectedObject.name}</span>
+                <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded">
+                  {selectedObject.type.toUpperCase()}
+                </span>
+              </div>
+              <p className="text-xs text-gray-400">
+                ID: {selectedObject.id}
+              </p>
             </div>
-            <div className="space-y-1 max-h-64 overflow-y-auto">
-              {rootObjects.map((obj) => renderObjectHierarchy(obj))}
-            </div>
-          </div>
 
-          {selectedObject && (
+            {/* Basic Properties */}
             <div>
-              <h4 className="text-md font-semibold text-white mb-2">Properties</h4>
+              <h4 className="text-md font-semibold text-white mb-2">Basic</h4>
               <div className="space-y-2">
                 <div>
                   <label className="block text-sm text-gray-300 mb-1">Name</label>
@@ -1165,83 +1166,157 @@ print("Configuration loaded")`;
                     className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                   />
                 </div>
-                {selectedObject.mesh && (
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-1">X</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={selectedObject.mesh?.position.x.toFixed(1) || 0}
-                        onChange={(e) => updateObjectProperty(selectedObject.id, 'position.x', parseFloat(e.target.value))}
-                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-1">Y</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={selectedObject.mesh?.position.y.toFixed(1) || 0}
-                        onChange={(e) => updateObjectProperty(selectedObject.id, 'position.y', parseFloat(e.target.value))}
-                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-1">Z</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={selectedObject.mesh?.position.z.toFixed(1) || 0}
-                        onChange={(e) => updateObjectProperty(selectedObject.id, 'position.z', parseFloat(e.target.value))}
-                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                      />
-                    </div>
-                  </div>
-                )}
-                {selectedObject.type === 'actor' && (
-                  <div className="mt-3 p-3 bg-green-900/20 border border-green-400/20 rounded-lg">
-                    <h5 className="text-green-400 font-semibold text-sm mb-2">Actor Properties</h5>
-                    <div className="text-xs text-green-200 space-y-1">
-                      <div>• Role: Spawn Point</div>
-                      <div>• Collision: Disabled</div>
-                      <div>• Players spawn at this location</div>
-                      <div>• Edit Config to change role</div>
-                    </div>
-                  </div>
-                )}
+                
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedObject.visible}
+                    onChange={(e) => {
+                      selectedObject.visible = e.target.checked;
+                      if (selectedObject.mesh) {
+                        selectedObject.mesh.visible = e.target.checked;
+                      }
+                      setObjects([...objects]);
+                    }}
+                    className="rounded"
+                  />
+                  <label className="text-sm text-gray-300">Visible</label>
+                </div>
               </div>
             </div>
-          )}
 
-          <div>
-            <h4 className="text-md font-semibold text-white mb-2">Lighting</h4>
-            <div className="space-y-2">
+            {/* Transform Properties */}
+            {selectedObject.mesh && (
               <div>
-                <label className="block text-sm text-gray-300 mb-1">Ambient</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  defaultValue="0.6"
-                  className="w-full"
-                />
+                <h4 className="text-md font-semibold text-white mb-2">Transform</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-1">Position</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">X</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={selectedObject.mesh?.position.x.toFixed(1) || 0}
+                          onChange={(e) => updateObjectProperty(selectedObject.id, 'position.x', parseFloat(e.target.value))}
+                          className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Y</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={selectedObject.mesh?.position.y.toFixed(1) || 0}
+                          onChange={(e) => updateObjectProperty(selectedObject.id, 'position.y', parseFloat(e.target.value))}
+                          className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Z</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={selectedObject.mesh?.position.z.toFixed(1) || 0}
+                          onChange={(e) => updateObjectProperty(selectedObject.id, 'position.z', parseFloat(e.target.value))}
+                          className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
+            )}
+
+            {/* Appearance Properties */}
+            {selectedObject.mesh && (
               <div>
-                <label className="block text-sm text-gray-300 mb-1">Directional</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  defaultValue="0.8"
-                  className="w-full"
-                />
+                <h4 className="text-md font-semibold text-white mb-2">Appearance</h4>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-1">Color</label>
+                    <input
+                      type="color"
+                      value={`#${(selectedObject.mesh.material as THREE.MeshLambertMaterial).color.getHexString()}`}
+                      onChange={(e) => updateObjectProperty(selectedObject.id, 'color', e.target.value)}
+                      className="w-full h-10 bg-gray-700 border border-gray-600 rounded"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-1">Transparency</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={1 - (selectedObject.mesh.material as THREE.MeshLambertMaterial).opacity}
+                      onChange={(e) => updateObjectProperty(selectedObject.id, 'transparency', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                    <span className="text-xs text-gray-400">
+                      {Math.round((1 - (selectedObject.mesh.material as THREE.MeshLambertMaterial).opacity) * 100)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Actor Properties */}
+            {selectedObject.type === 'actor' && (
+              <div>
+                <h4 className="text-md font-semibold text-white mb-2">Actor Properties</h4>
+                <div className="bg-green-900/20 border border-green-400/20 rounded-lg p-3">
+                  <div className="text-xs text-green-200 space-y-1">
+                    <div>• Role: Spawn Point</div>
+                    <div>• Collision: Disabled</div>
+                    <div>• Players spawn at this location</div>
+                    <div>• Edit Config to change role</div>
+                    <div className="text-green-400 font-semibold">✓ Now fully visible!</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div>
+              <h4 className="text-md font-semibold text-white mb-2">Actions</h4>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setSelectedObject(null)}
+                  className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                >
+                  Deselect
+                </button>
+                {selectedObject.id !== 'baseplate' && (
+                  <button
+                    onClick={() => deleteObject(selectedObject.id)}
+                    className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                  >
+                    Delete Object
+                  </button>
+                )}
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="text-center text-gray-400 py-8">
+            <div className="text-4xl mb-4">🎯</div>
+            <h4 className="text-lg font-semibold mb-2">No Object Selected</h4>
+            <p className="text-sm">Click on an object in the 3D view to see its properties</p>
+            
+            <div className="mt-6 p-4 bg-gray-700/50 rounded-lg">
+              <h5 className="text-green-400 font-semibold mb-2">Quick Actions</h5>
+              <button
+                onClick={(e) => handleAddButtonClick(e)}
+                className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
+              >
+                + Add New Object
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add Object Menu */}

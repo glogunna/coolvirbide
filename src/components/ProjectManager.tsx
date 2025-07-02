@@ -376,7 +376,6 @@ console.log("Ploid configured successfully");`;
         return `// Input Handler (Home Script)
 // WARNING: Modifying this script may cause player movement issues!
 
-const player = inst('script.parent.Ploid.PlayerOwner');
 const input = player.input;
 const character = player.CharacterModel;
 const ploidConfig = character.Ploid.Config;
@@ -415,7 +414,6 @@ inputService.onKeyUp(onKeyUp);`;
         return `// Camera Controller (Home Script)
 // WARNING: Modifying this script may cause camera issues!
 
-const player = inst('script.parent.Ploid.PlayerOwner');
 const camera = inst('Workspace.Camera');
 const character = player.CharacterModel;
 const mouse = player.Mouse;
@@ -465,7 +463,6 @@ mouse.onMove(onMouseMove);`;
         return `// Movement Controller (Home Script)
 // WARNING: Modifying this script may cause movement issues!
 
-const player = inst('script.parent.Ploid.PlayerOwner');
 const character = player.CharacterModel;
 const ploidConfig = character.Ploid.Config;
 

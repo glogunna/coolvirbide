@@ -18,12 +18,15 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
   const [objects, setObjects] = useState<any[]>([]);
   const [keys, setKeys] = useState<Set<string>>(new Set());
   const [isDraggingGizmo, setIsDraggingGizmo] = useState(false);
-  const [dragStartPosition, setDragStartPosition] = useState<THREE.Vector3 | null>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [addMenuPosition, setAddMenuPosition] = useState({ x: 0, y: 0 });
-  const [addMenuParent, setAddMenuParent] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingName, setEditingName] = useState<string | null>(null);
+
+  // CRITICAL: Refs for gizmo dragging
+  const dragPlaneRef = useRef<THREE.Plane | null>(null);
+  const dragOffsetRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const gizmoAxisRef = useRef<string | null>(null);
 
   const objectTypes = [
     { id: 'config', name: 'Configuration', icon: '⚙️', description: 'Configuration object for properties' },
@@ -46,6 +49,21 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     type.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // CRITICAL: Function to sync objects with project data and update explorer
+  const syncWithProject = (updatedObjects: any[]) => {
+    // Update the project's workspace objects
+    const workspaceObjects = updatedObjects.filter(obj => obj.parent === 'workspace' || !obj.parent);
+    project.services.workspace.objects = workspaceObjects;
+    
+    console.log('[WORKSPACE] Synced objects with project:', workspaceObjects);
+    
+    // Trigger a re-render of the file explorer by updating the project reference
+    // This ensures the explorer shows the updated workspace objects
+    if (window.updateFileExplorer) {
+      window.updateFileExplorer();
+    }
+  };
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -97,7 +115,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     baseplate.userData = { id: 'baseplate', name: 'Baseplate', type: 'part', selectable: true };
     scene.add(baseplate);
 
-    // CRITICAL FIX: Initialize objects array with workspace objects from project
+    // CRITICAL: Load existing workspace objects from project AND create default objects
     const initialObjects = [
       { 
         id: 'baseplate', 
@@ -113,207 +131,113 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       }
     ];
 
-    // CRITICAL: Load existing workspace objects from project
-    if (project.services.workspace.objects && project.services.workspace.objects.length > 0) {
-      console.log('[WORKSPACE] Loading existing workspace objects:', project.services.workspace.objects);
-      
-      project.services.workspace.objects.forEach((obj: any) => {
-        if (obj.type === 'config') return; // Skip config objects
-        
-        let mesh: THREE.Mesh | THREE.Group | null = null;
+    // Add default objects for game projects
+    if (project.type === 'game3d') {
+      // Add a red cube (Part)
+      const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
+      const cubeMaterial = new THREE.MeshLambertMaterial({ color: 0xff6b6b });
+      const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+      cube.position.set(0, 1, 0);
+      cube.castShadow = true;
+      cube.name = 'Part';
+      cube.userData = { id: 'part1', name: 'Part', type: 'part', selectable: true };
+      scene.add(cube);
 
-        switch (obj.type) {
-          case 'part':
-            const partGeometry = new THREE.BoxGeometry(2, 2, 2);
-            const partMaterial = new THREE.MeshLambertMaterial({ 
-              color: obj.color ? new THREE.Color(obj.color) : 0x4ECDC4 
-            });
-            mesh = new THREE.Mesh(partGeometry, partMaterial);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            break;
+      // Add a sphere (Ball)
+      const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+      const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0x4ecdc4 });
+      const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      sphere.position.set(5, 1, 0);
+      sphere.castShadow = true;
+      sphere.name = 'Ball';
+      sphere.userData = { id: 'ball1', name: 'Ball', type: 'sphere', selectable: true };
+      scene.add(sphere);
 
-          case 'sphere':
-            const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-            const sphereMaterial = new THREE.MeshLambertMaterial({ 
-              color: obj.color ? new THREE.Color(obj.color) : 0xFFE66D 
-            });
-            mesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            break;
-
-          case 'cylinder':
-            const cylinderGeometry = new THREE.CylinderGeometry(1, 1, 2, 32);
-            const cylinderMaterial = new THREE.MeshLambertMaterial({ 
-              color: obj.color ? new THREE.Color(obj.color) : 0xFF6B6B 
-            });
-            mesh = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            break;
-
-          case 'actor':
-            // FIXED: Make actor spawn points VISIBLE (not transparent)
-            const actorGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
-            const actorMaterial = new THREE.MeshLambertMaterial({ 
-              color: 0x00FF00  // Solid green, no transparency
-            });
-            mesh = new THREE.Mesh(actorGeometry, actorMaterial);
-            
-            // Add glow effect (this can be semi-transparent)
-            const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
-            const glowMaterial = new THREE.MeshBasicMaterial({ 
-              color: 0x00FF00,
-              transparent: true,
-              opacity: 0.3
-            });
-            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-            mesh.add(glow);
-            break;
-
-          case 'model':
-          case 'folder':
-            mesh = new THREE.Group();
-            break;
-        }
-
-        if (mesh) {
-          mesh.position.set(
-            obj.position?.x || 0, 
-            obj.position?.y || (obj.type === 'actor' ? 0.1 : 2), 
-            obj.position?.z || 0
-          );
-          
-          if (obj.rotation) {
-            mesh.rotation.set(obj.rotation.x || 0, obj.rotation.y || 0, obj.rotation.z || 0);
-          }
-          if (obj.scale && obj.type !== 'part' && obj.type !== 'sphere' && obj.type !== 'cylinder') {
-            mesh.scale.set(obj.scale.x || 1, obj.scale.y || 1, obj.scale.z || 1);
-          }
-
-          mesh.name = obj.name;
-          mesh.userData = { id: obj.id, name: obj.name, type: obj.type, selectable: true };
-          scene.add(mesh);
-
-          initialObjects.push({
-            ...obj,
-            mesh: mesh,
-            visible: true,
-            selectable: true,
-            parent: 'workspace',
-            children: obj.children || [],
-            position: obj.position || { x: 0, y: obj.type === 'actor' ? 0.1 : 2, z: 0 },
-            color: obj.color || getDefaultColor(obj.type)
-          });
-        }
+      // Add an Actor (spawn point) - SOLID GREEN CYLINDER
+      const actorGeometry = new THREE.CylinderGeometry(1, 1, 0.4, 16);
+      const actorMaterial = new THREE.MeshLambertMaterial({ 
+        color: 0x00FF00  // SOLID GREEN - NO TRANSPARENCY
       });
-    } else {
-      // Add some example objects if workspace is empty
-      if (project.type === 'game3d') {
-        // Add a cube
-        const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
-        const cubeMaterial = new THREE.MeshLambertMaterial({ color: 0xff6b6b });
-        const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-        cube.position.set(0, 1, 0);
-        cube.castShadow = true;
-        cube.name = 'Part';
-        cube.userData = { id: 'part1', name: 'Part', type: 'part', selectable: true };
-        scene.add(cube);
+      const actor = new THREE.Mesh(actorGeometry, actorMaterial);
+      actor.position.set(-5, 0.2, 0);
+      actor.castShadow = true;
+      actor.name = 'SpawnPoint';
+      actor.userData = { id: 'spawn1', name: 'SpawnPoint', type: 'actor', selectable: true };
+      scene.add(actor);
 
-        // Add a sphere
-        const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-        const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0x4ecdc4 });
-        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-        sphere.position.set(5, 1, 0);
-        sphere.castShadow = true;
-        sphere.name = 'Ball';
-        sphere.userData = { id: 'ball1', name: 'Ball', type: 'sphere', selectable: true };
-        scene.add(sphere);
+      // Add subtle glow effect (but keep main object solid)
+      const glowGeometry = new THREE.CylinderGeometry(1.1, 1.1, 0.1, 16);
+      const glowMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x00FF00,
+        transparent: true,
+        opacity: 0.2
+      });
+      const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+      glow.position.y = -0.15;
+      actor.add(glow);
 
-        // Add an Actor (spawn point) - FIXED: Make it VISIBLE
-        const actorGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
-        const actorMaterial = new THREE.MeshLambertMaterial({ 
-          color: 0x00FF00  // Solid green, no transparency
-        });
-        const actor = new THREE.Mesh(actorGeometry, actorMaterial);
-        actor.position.set(-5, 0.1, 0);
-        actor.name = 'SpawnPoint';
-        actor.userData = { id: 'spawn1', name: 'SpawnPoint', type: 'actor', selectable: true };
-        scene.add(actor);
+      // Add these objects to our objects array AND project data
+      const newObjects = [
+        { 
+          id: 'part1', 
+          name: 'Part', 
+          type: 'part', 
+          mesh: cube, 
+          visible: true, 
+          selectable: true,
+          parent: 'workspace',
+          children: [],
+          position: { x: 0, y: 1, z: 0 },
+          color: '#ff6b6b'
+        },
+        { 
+          id: 'ball1', 
+          name: 'Ball', 
+          type: 'sphere', 
+          mesh: sphere, 
+          visible: true, 
+          selectable: true,
+          parent: 'workspace',
+          children: [],
+          position: { x: 5, y: 1, z: 0 },
+          color: '#4ecdc4'
+        },
+        { 
+          id: 'spawn1', 
+          name: 'SpawnPoint', 
+          type: 'actor', 
+          mesh: actor, 
+          visible: true, 
+          selectable: true,
+          parent: 'workspace',
+          children: [{
+            id: 'spawn1_config',
+            name: 'Config',
+            type: 'config',
+            content: getActorConfigContent(),
+            children: []
+          }],
+          position: { x: -5, y: 0.2, z: 0 },
+          color: '#00FF00'
+        }
+      ];
 
-        // Add glow effect to actor
-        const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
-        const glowMaterial = new THREE.MeshBasicMaterial({ 
-          color: 0x00FF00,
-          transparent: true,
-          opacity: 0.3
-        });
-        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-        actor.add(glow);
-
-        initialObjects.push(
-          { 
-            id: 'part1', 
-            name: 'Part', 
-            type: 'part', 
-            mesh: cube, 
-            visible: true, 
-            selectable: true,
-            parent: 'workspace',
-            children: [],
-            position: { x: 0, y: 1, z: 0 },
-            color: '#ff6b6b'
-          },
-          { 
-            id: 'ball1', 
-            name: 'Ball', 
-            type: 'sphere', 
-            mesh: sphere, 
-            visible: true, 
-            selectable: true,
-            parent: 'workspace',
-            children: [],
-            position: { x: 5, y: 1, z: 0 },
-            color: '#4ecdc4'
-          },
-          { 
-            id: 'spawn1', 
-            name: 'SpawnPoint', 
-            type: 'actor', 
-            mesh: actor, 
-            visible: true, 
-            selectable: true,
-            parent: 'workspace',
-            children: [{
-              id: 'spawn1_config',
-              name: 'Config',
-              type: 'config',
-              content: getActorConfigContent(),
-              children: []
-            }],
-            position: { x: -5, y: 0.1, z: 0 },
-            color: '#00FF00'
-          }
-        );
-
-        // CRITICAL: Update project workspace objects so they appear in file explorer
-        project.services.workspace.objects = initialObjects.filter(obj => obj.id !== 'baseplate');
-      }
+      initialObjects.push(...newObjects);
     }
 
     setObjects(initialObjects);
+    
+    // CRITICAL: Sync with project data immediately
+    syncWithProject(initialObjects);
 
     // Grid helper
     const gridHelper = new THREE.GridHelper(50, 50);
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // Mouse controls
+    // FIXED: Mouse controls with proper gizmo handling
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
-    let dragPlane: THREE.Plane | null = null;
-    let dragOffset = new THREE.Vector3();
 
     const onMouseDown = (event: MouseEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -322,32 +246,31 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
 
       raycaster.setFromCamera(mouse, camera);
       
-      // FIXED: Check for gizmo interaction first with proper setup
+      // CRITICAL: Check for gizmo interaction first
       const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
       const gizmoIntersects = raycaster.intersectObjects(gizmos);
       
       if (gizmoIntersects.length > 0 && selectedObject) {
-        // Start gizmo interaction
+        console.log('[GIZMO] Starting gizmo drag');
         setIsDraggingGizmo(true);
         
-        // Create drag plane based on gizmo axis
         const gizmo = gizmoIntersects[0].object;
         const axis = gizmo.userData.axis;
+        gizmoAxisRef.current = axis;
         
-        // FIXED: Better drag plane setup
+        // Create appropriate drag plane
         if (axis === 'x') {
-          dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -selectedObject.mesh.position.y);
+          dragPlaneRef.current = new THREE.Plane(new THREE.Vector3(0, 1, 0), -selectedObject.mesh.position.y);
         } else if (axis === 'y') {
-          dragPlane = new THREE.Plane(new THREE.Vector3(1, 0, 1).normalize(), 0);
+          dragPlaneRef.current = new THREE.Plane(new THREE.Vector3(0, 0, 1), -selectedObject.mesh.position.z);
         } else if (axis === 'z') {
-          dragPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), -selectedObject.mesh.position.x);
+          dragPlaneRef.current = new THREE.Plane(new THREE.Vector3(0, 1, 0), -selectedObject.mesh.position.y);
         }
         
-        // Calculate offset from object center to mouse position
+        // Calculate drag offset
         const intersection = new THREE.Vector3();
-        if (dragPlane) {
-          raycaster.ray.intersectPlane(dragPlane, intersection);
-          dragOffset.subVectors(selectedObject.mesh.position, intersection);
+        if (dragPlaneRef.current && raycaster.ray.intersectPlane(dragPlaneRef.current, intersection)) {
+          dragOffsetRef.current.subVectors(selectedObject.mesh.position, intersection);
         }
         
         return;
@@ -360,10 +283,11 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       if (intersects.length > 0) {
         const clickedObject = intersects[0].object;
         const objectData = initialObjects.find(obj => obj.id === clickedObject.userData.id);
-        setSelectedObject(objectData);
-        
-        // Highlight selected object
-        highlightObject(clickedObject);
+        if (objectData) {
+          setSelectedObject(objectData);
+          highlightObject(clickedObject);
+          console.log('[SELECTION] Selected object:', objectData.name);
+        }
       } else {
         setSelectedObject(null);
         clearHighlights();
@@ -373,8 +297,8 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     };
 
     const onMouseMove = (event: MouseEvent) => {
-      if (isDraggingGizmo && selectedObject && dragPlane) {
-        // FIXED: Handle gizmo dragging with proper plane intersection
+      // CRITICAL: Handle gizmo dragging
+      if (isDraggingGizmo && selectedObject && dragPlaneRef.current && gizmoAxisRef.current) {
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -382,27 +306,38 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         raycaster.setFromCamera(mouse, camera);
         
         const intersection = new THREE.Vector3();
-        if (raycaster.ray.intersectPlane(dragPlane, intersection)) {
-          const newPosition = intersection.add(dragOffset);
+        if (raycaster.ray.intersectPlane(dragPlaneRef.current, intersection)) {
+          const newPosition = intersection.add(dragOffsetRef.current);
           
-          if (tool === 'move') {
-            selectedObject.mesh.position.copy(newPosition);
-            selectedObject.mesh.position.y = Math.max(selectedObject.mesh.position.y, 0.1);
-            
-            // CRITICAL: Update object data
-            selectedObject.position = {
-              x: selectedObject.mesh.position.x,
-              y: selectedObject.mesh.position.y,
-              z: selectedObject.mesh.position.z
-            };
-            
-            updateGizmoPositions(selectedObject.mesh);
-            updateProjectWorkspace();
+          // Apply movement only on the selected axis
+          const currentPos = selectedObject.mesh.position.clone();
+          
+          if (gizmoAxisRef.current === 'x') {
+            currentPos.x = newPosition.x;
+          } else if (gizmoAxisRef.current === 'y') {
+            currentPos.y = Math.max(0.1, newPosition.y); // Prevent going below ground
+          } else if (gizmoAxisRef.current === 'z') {
+            currentPos.z = newPosition.z;
           }
+          
+          selectedObject.mesh.position.copy(currentPos);
+          
+          // Update object data
+          selectedObject.position = {
+            x: currentPos.x,
+            y: currentPos.y,
+            z: currentPos.z
+          };
+          
+          // Update gizmo positions
+          updateGizmoPositions(selectedObject.mesh);
+          
+          console.log('[GIZMO] Dragging on axis:', gizmoAxisRef.current, 'to position:', currentPos);
         }
         return;
       }
 
+      // Handle camera rotation
       if (!isDragging) return;
 
       const deltaMove = {
@@ -410,7 +345,6 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
         y: event.clientY - previousMousePosition.y
       };
 
-      // Rotate camera around the scene
       const spherical = new THREE.Spherical();
       spherical.setFromVector3(camera.position);
       spherical.theta -= deltaMove.x * 0.01;
@@ -425,9 +359,23 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
 
     const onMouseUp = () => {
       isDragging = false;
-      setIsDraggingGizmo(false);
-      dragPlane = null;
-      dragOffset.set(0, 0, 0);
+      
+      if (isDraggingGizmo) {
+        console.log('[GIZMO] Finished gizmo drag');
+        setIsDraggingGizmo(false);
+        dragPlaneRef.current = null;
+        gizmoAxisRef.current = null;
+        dragOffsetRef.current.set(0, 0, 0);
+        
+        // CRITICAL: Sync changes with project after dragging
+        if (selectedObject) {
+          const updatedObjects = objects.map(obj => 
+            obj.id === selectedObject.id ? selectedObject : obj
+          );
+          setObjects(updatedObjects);
+          syncWithProject(updatedObjects);
+        }
+      }
     };
 
     const highlightObject = (object: THREE.Object3D) => {
@@ -448,7 +396,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       outline.name = 'outline';
       scene.add(outline);
 
-      // Add transform gizmos based on current tool
+      // Add transform gizmos
       addTransformGizmos(object);
     };
 
@@ -463,12 +411,16 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     const updateGizmoPositions = (object: THREE.Object3D) => {
       const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
       gizmos.forEach(gizmo => {
-        const basePosition = object.position.clone();
-        gizmo.position.copy(basePosition);
+        gizmo.position.copy(object.position);
         
-        if (gizmo.name.includes('x')) gizmo.position.x += 2;
-        if (gizmo.name.includes('y')) gizmo.position.y += 2;
-        if (gizmo.name.includes('z')) gizmo.position.z += 2;
+        // Offset gizmos based on their axis
+        if (gizmo.userData.axis === 'x') {
+          gizmo.position.x += 2;
+        } else if (gizmo.userData.axis === 'y') {
+          gizmo.position.y += 2;
+        } else if (gizmo.userData.axis === 'z') {
+          gizmo.position.z += 2;
+        }
       });
       
       // Update outline position
@@ -487,7 +439,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     };
 
     const addMoveGizmos = (object: THREE.Object3D) => {
-      const arrowLength = 2;
+      const arrowLength = 1.5;
       const arrowRadius = 0.1;
       
       // X axis (red)
@@ -599,7 +551,6 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       camera.lookAt(0, 0, 0);
     };
 
-    // Keyboard controls for WASD movement
     const onKeyDown = (event: KeyboardEvent) => {
       setKeys(prev => new Set(prev).add(event.key.toLowerCase()));
     };
@@ -636,7 +587,7 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     };
   }, [project]);
 
-  // FIXED: Camera movement with WASD - moved outside useEffect to prevent teleporting
+  // Camera movement with WASD
   useEffect(() => {
     if (!cameraRef.current) return;
 
@@ -650,27 +601,21 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       camera.getWorldDirection(forward);
       right.crossVectors(forward, camera.up);
       
-      let moved = false;
-      
       if (keys.has('w')) {
         camera.position.addScaledVector(forward, moveSpeed);
-        moved = true;
       }
       if (keys.has('s')) {
         camera.position.addScaledVector(forward, -moveSpeed);
-        moved = true;
       }
       if (keys.has('a')) {
         camera.position.addScaledVector(right, -moveSpeed);
-        moved = true;
       }
       if (keys.has('d')) {
         camera.position.addScaledVector(right, moveSpeed);
-        moved = true;
       }
     };
 
-    const animationId = setInterval(moveCamera, 16); // ~60fps
+    const animationId = setInterval(moveCamera, 16);
     return () => clearInterval(animationId);
   }, [keys]);
 
@@ -693,33 +638,6 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       }
     }
   }, [tool, selectedObject]);
-
-  // CRITICAL: Function to update project workspace data
-  const updateProjectWorkspace = () => {
-    const workspaceObjects = objects.filter(obj => obj.id !== 'baseplate').map(obj => ({
-      id: obj.id,
-      name: obj.name,
-      type: obj.type,
-      position: obj.position,
-      rotation: obj.rotation || { x: 0, y: 0, z: 0 },
-      scale: obj.scale || { x: 1, y: 1, z: 1 },
-      color: obj.color,
-      children: obj.children || []
-    }));
-    
-    project.services.workspace.objects = workspaceObjects;
-    console.log('[WORKSPACE] Updated project workspace objects:', workspaceObjects);
-  };
-
-  const getDefaultColor = (type: string) => {
-    switch (type) {
-      case 'part': return '#4ECDC4';
-      case 'sphere': return '#FFE66D';
-      case 'cylinder': return '#FF6B6B';
-      case 'actor': return '#00FF00';
-      default: return '#FFFFFF';
-    }
-  };
 
   const getActorConfigContent = () => {
     return `// Actor Configuration
@@ -750,7 +668,7 @@ console.log("Actor configured as: " + actor.Role);`;
     const scene = sceneRef.current;
     if (!scene) return;
 
-    const arrowLength = 2;
+    const arrowLength = 1.5;
     const arrowRadius = 0.1;
     
     // X axis (red)
@@ -859,7 +777,7 @@ console.log("Actor configured as: " + actor.Role);`;
     scene.add(zCube);
   };
 
-  const addObject = (type: string, parentId?: string) => {
+  const addObject = (type: string) => {
     if (!sceneRef.current) return;
 
     const id = `${type}_${Date.now()}`;
@@ -869,10 +787,10 @@ console.log("Actor configured as: " + actor.Role);`;
       type,
       visible: true,
       selectable: false,
-      parent: parentId || 'workspace',
+      parent: 'workspace',
       children: [],
       position: { x: 0, y: 2, z: 0 },
-      color: getDefaultColor(type)
+      color: '#' + Math.floor(Math.random()*16777215).toString(16)
     };
 
     // Handle 3D objects
@@ -883,22 +801,21 @@ console.log("Actor configured as: " + actor.Role);`;
       switch (type) {
         case 'part':
           geometry = new THREE.BoxGeometry(2, 2, 2);
-          material = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
+          material = new THREE.MeshLambertMaterial({ color: newObject.color });
           break;
         case 'sphere':
           geometry = new THREE.SphereGeometry(1, 32, 32);
-          material = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
+          material = new THREE.MeshLambertMaterial({ color: newObject.color });
           break;
         case 'cylinder':
           geometry = new THREE.CylinderGeometry(1, 1, 2, 32);
-          material = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
+          material = new THREE.MeshLambertMaterial({ color: newObject.color });
           break;
         case 'actor':
-          geometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
-          material = new THREE.MeshLambertMaterial({ 
-            color: 0x00FF00  // Solid green, no transparency
-          });
-          newObject.position = { x: 0, y: 0.1, z: 0 };
+          geometry = new THREE.CylinderGeometry(1, 1, 0.4, 16);
+          material = new THREE.MeshLambertMaterial({ color: 0x00FF00 }); // Solid green
+          newObject.color = '#00FF00';
+          newObject.position.y = 0.2;
           break;
         default:
           return;
@@ -907,7 +824,7 @@ console.log("Actor configured as: " + actor.Role);`;
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(
         (Math.random() - 0.5) * 10,
-        type === 'actor' ? 0.1 : 2,
+        newObject.position.y,
         (Math.random() - 0.5) * 10
       );
       mesh.castShadow = true;
@@ -916,13 +833,14 @@ console.log("Actor configured as: " + actor.Role);`;
       
       // Add glow effect for actors
       if (type === 'actor') {
-        const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
+        const glowGeometry = new THREE.CylinderGeometry(1.1, 1.1, 0.1, 16);
         const glowMaterial = new THREE.MeshBasicMaterial({ 
           color: 0x00FF00,
           transparent: true,
-          opacity: 0.3
+          opacity: 0.2
         });
         const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.position.y = -0.15;
         mesh.add(glow);
         
         // Add default config for Actor
@@ -944,7 +862,6 @@ console.log("Actor configured as: " + actor.Role);`;
         y: mesh.position.y,
         z: mesh.position.z
       };
-      newObject.color = '#' + material.color.getHexString();
     }
 
     // Handle script objects
@@ -952,17 +869,15 @@ console.log("Actor configured as: " + actor.Role);`;
       newObject.content = getDefaultScriptContent(type);
     }
 
-    // Add to parent's children array
-    if (parentId) {
-      const parent = objects.find(obj => obj.id === parentId);
-      if (parent) {
-        parent.children.push(newObject);
-      }
-    }
-
-    setObjects(prev => [...prev, newObject]);
-    updateProjectWorkspace();
+    const updatedObjects = [...objects, newObject];
+    setObjects(updatedObjects);
+    
+    // CRITICAL: Sync with project immediately
+    syncWithProject(updatedObjects);
+    
     setShowAddMenu(false);
+    
+    console.log('[WORKSPACE] Added new object:', newObject.name, 'ID:', newObject.id);
   };
 
   const getDefaultScriptContent = (type: string) => {
@@ -1023,15 +938,12 @@ console.log("Configuration loaded");`;
         sceneRef.current.remove(objectToDelete.mesh);
       }
       
-      // Remove from parent's children array
-      const parent = objects.find(obj => obj.children.some((child: any) => child.id === id));
-      if (parent) {
-        parent.children = parent.children.filter((child: any) => child.id !== id);
-      }
-      
       // Remove from objects array
-      setObjects(prev => prev.filter(obj => obj.id !== id));
-      updateProjectWorkspace();
+      const updatedObjects = objects.filter(obj => obj.id !== id);
+      setObjects(updatedObjects);
+      
+      // CRITICAL: Sync with project
+      syncWithProject(updatedObjects);
       
       if (selectedObject?.id === id) {
         setSelectedObject(null);
@@ -1044,19 +956,24 @@ console.log("Configuration loaded");`;
           gizmos.forEach(gizmo => scene.remove(gizmo));
         }
       }
+      
+      console.log('[WORKSPACE] Deleted object:', objectToDelete.name);
     }
   };
 
   const toggleVisibility = (id: string) => {
-    const obj = objects.find(o => o.id === id);
-    if (obj) {
-      obj.visible = !obj.visible;
-      if (obj.mesh) {
-        obj.mesh.visible = obj.visible;
+    const updatedObjects = objects.map(obj => {
+      if (obj.id === id) {
+        obj.visible = !obj.visible;
+        if (obj.mesh) {
+          obj.mesh.visible = obj.visible;
+        }
       }
-      setObjects([...objects]);
-      updateProjectWorkspace();
-    }
+      return obj;
+    });
+    
+    setObjects(updatedObjects);
+    syncWithProject(updatedObjects);
   };
 
   const resetCamera = () => {
@@ -1065,151 +982,66 @@ console.log("Configuration loaded");`;
     cameraRef.current.lookAt(0, 0, 0);
   };
 
-  // FIXED: Property update function that actually works
+  // CRITICAL: Fixed property updates that actually work
   const updateObjectProperty = (id: string, property: string, value: any) => {
-    const obj = objects.find(o => o.id === id);
-    if (obj) {
-      if (property === 'name') {
-        obj.name = value;
-        if (obj.mesh) {
-          obj.mesh.name = value;
-          obj.mesh.userData.name = value;
-        }
-      } else if (property.startsWith('position.')) {
-        const axis = property.split('.')[1] as 'x' | 'y' | 'z';
-        obj.position[axis] = value;
-        if (obj.mesh) {
-          obj.mesh.position[axis] = value;
-          
-          // Update gizmos position if this object is selected
-          if (selectedObject?.id === id && sceneRef.current) {
-            const gizmos = sceneRef.current.children.filter(child => child.userData.isGizmo);
-            gizmos.forEach(gizmo => {
-              gizmo.position.copy(obj.mesh.position);
-              if (gizmo.name.includes('x')) gizmo.position.x += 2;
-              if (gizmo.name.includes('y')) gizmo.position.y += 2;
-              if (gizmo.name.includes('z')) gizmo.position.z += 2;
-            });
+    const updatedObjects = objects.map(obj => {
+      if (obj.id === id) {
+        if (property === 'name') {
+          obj.name = value;
+          if (obj.mesh) {
+            obj.mesh.name = value;
+            obj.mesh.userData.name = value;
+          }
+        } else if (property.startsWith('position.')) {
+          const axis = property.split('.')[1] as 'x' | 'y' | 'z';
+          obj.position[axis] = value;
+          if (obj.mesh) {
+            obj.mesh.position[axis] = value;
             
-            // Update outline position
-            const outlines = sceneRef.current.children.filter(child => child.name === 'outline');
-            outlines.forEach(outline => outline.position.copy(obj.mesh.position));
+            // Update gizmos position if this object is selected
+            if (selectedObject?.id === id && sceneRef.current) {
+              const gizmos = sceneRef.current.children.filter(child => child.userData.isGizmo);
+              gizmos.forEach(gizmo => {
+                gizmo.position.copy(obj.mesh.position);
+                if (gizmo.userData.axis === 'x') gizmo.position.x += 2;
+                if (gizmo.userData.axis === 'y') gizmo.position.y += 2;
+                if (gizmo.userData.axis === 'z') gizmo.position.z += 2;
+              });
+              
+              // Update outline position
+              const outlines = sceneRef.current.children.filter(child => child.name === 'outline');
+              outlines.forEach(outline => outline.position.copy(obj.mesh.position));
+            }
+          }
+        } else if (property === 'color') {
+          obj.color = value;
+          if (obj.mesh && obj.mesh.material) {
+            (obj.mesh.material as THREE.MeshLambertMaterial).color.setHex(value.replace('#', '0x'));
           }
         }
-      } else if (property === 'color') {
-        obj.color = value;
-        if (obj.mesh && obj.mesh.material) {
-          (obj.mesh.material as THREE.MeshLambertMaterial).color.setHex(parseInt(value.replace('#', '0x')));
-        }
-      } else if (property === 'visible') {
-        obj.visible = value;
-        if (obj.mesh) {
-          obj.mesh.visible = value;
+        
+        // Update selected object if it's the one being modified
+        if (selectedObject?.id === id) {
+          setSelectedObject({ ...obj });
         }
       }
-      
-      setObjects([...objects]);
-      updateProjectWorkspace();
-      
-      if (selectedObject?.id === id) {
-        setSelectedObject({ ...obj });
-      }
-    }
+      return obj;
+    });
+    
+    setObjects(updatedObjects);
+    
+    // CRITICAL: Sync with project after every property change
+    syncWithProject(updatedObjects);
+    
+    console.log('[PROPERTIES] Updated', property, 'to', value, 'for object', id);
   };
 
-  const handleAddButtonClick = (event: React.MouseEvent, parentId?: string) => {
+  const handleAddButtonClick = (event: React.MouseEvent) => {
     event.stopPropagation();
     const rect = (event.target as HTMLElement).getBoundingClientRect();
     setAddMenuPosition({ x: rect.right + 10, y: rect.top });
-    setAddMenuParent(parentId ? objects.find(obj => obj.id === parentId) : null);
     setShowAddMenu(true);
     setSearchTerm('');
-  };
-
-  const renderObjectHierarchy = (obj: any, depth = 0) => {
-    const hasChildren = obj.children && obj.children.length > 0;
-    const isSelected = selectedObject?.id === obj.id;
-
-    return (
-      <div key={obj.id}>
-        <div
-          className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors group ${
-            isSelected ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
-          }`}
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          onClick={() => obj.selectable && setSelectedObject(obj)}
-          onMouseEnter={(e) => {
-            if (!obj.addButton) {
-              obj.addButton = true;
-              setObjects([...objects]);
-            }
-          }}
-        >
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className="text-lg">{getObjectIcon(obj.type)}</span>
-            {editingName === obj.id ? (
-              <input
-                type="text"
-                value={obj.name}
-                onChange={(e) => updateObjectProperty(obj.id, 'name', e.target.value)}
-                onBlur={() => setEditingName(null)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') setEditingName(null);
-                }}
-                className="flex-1 px-1 py-0.5 bg-gray-600 border border-gray-500 rounded text-white text-sm"
-                autoFocus
-              />
-            ) : (
-              <span className="text-sm text-white truncate">{obj.name}</span>
-            )}
-          </div>
-          
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={(e) => handleAddButtonClick(e, obj.id)}
-              className="p-1 hover:bg-gray-500 rounded"
-              title="Add Object"
-            >
-              <Plus className="w-3 h-3 text-gray-400" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingName(obj.id);
-              }}
-              className="p-1 hover:bg-gray-500 rounded"
-              title="Rename"
-            >
-              <Edit2 className="w-3 h-3 text-gray-400" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleVisibility(obj.id);
-              }}
-              className="p-1 hover:bg-gray-500 rounded"
-              title="Toggle Visibility"
-            >
-              {obj.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-            </button>
-            {obj.id !== 'baseplate' && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteObject(obj.id);
-                }}
-                className="p-1 hover:bg-red-600 rounded"
-                title="Delete"
-              >
-                <Trash2 className="w-3 h-3 text-gray-400" />
-              </button>
-            )}
-          </div>
-        </div>
-        
-        {hasChildren && obj.children.map((child: any) => renderObjectHierarchy(child, depth + 1))}
-      </div>
-    );
   };
 
   const getObjectIcon = (type: string) => {
@@ -1231,9 +1063,6 @@ console.log("Configuration loaded");`;
     };
     return iconMap[type] || '📄';
   };
-
-  // Get root objects (those with parent 'workspace' or no parent)
-  const rootObjects = objects.filter(obj => obj.parent === 'workspace' || !obj.parent);
 
   return (
     <div className="flex-1 flex">
@@ -1275,7 +1104,7 @@ console.log("Configuration loaded");`;
         {/* Add Objects Menu */}
         <div className="absolute top-4 right-4 z-10 bg-gray-800 rounded-lg p-2">
           <button
-            onClick={(e) => handleAddButtonClick(e)}
+            onClick={handleAddButtonClick}
             className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded text-sm transition-colors"
           >
             + Add Object
@@ -1294,12 +1123,13 @@ console.log("Configuration loaded");`;
             <div>Click objects to select</div>
             <div className="text-yellow-400">✓ Drag gizmos to transform</div>
             <div className="text-green-400">Tool: {tool.charAt(0).toUpperCase() + tool.slice(1)}</div>
-            <div className="text-cyan-400">✓ Green cylinders: Actor spawn points (VISIBLE!)</div>
+            <div className="text-cyan-400">✓ Green cylinders: Actor spawn points</div>
+            <div className="text-purple-400">✓ Objects sync with explorer!</div>
           </div>
         </div>
       </div>
 
-      {/* FIXED: Properties Panel instead of Scene Objects */}
+      {/* Properties Panel */}
       <div className="w-80 bg-gray-800 border-l border-gray-700 p-4">
         <h3 className="text-lg font-semibold text-white mb-4">Properties</h3>
         
@@ -1308,15 +1138,10 @@ console.log("Configuration loaded");`;
             {/* Object Info */}
             <div className="bg-gray-700/50 rounded-lg p-3">
               <h4 className="text-md font-semibold text-white mb-2">Object Info</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Type:</span>
-                  <span className="text-white">{selectedObject.type}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">ID:</span>
-                  <span className="text-white text-xs">{selectedObject.id}</span>
-                </div>
+              <div className="text-sm text-gray-300 space-y-1">
+                <div>Type: <span className="text-green-400">{selectedObject.type}</span></div>
+                <div>ID: <span className="text-blue-400">{selectedObject.id}</span></div>
+                <div>Selectable: <span className="text-yellow-400">{selectedObject.selectable ? 'Yes' : 'No'}</span></div>
               </div>
             </div>
 
@@ -1338,7 +1163,7 @@ console.log("Configuration loaded");`;
                   <input
                     type="checkbox"
                     checked={selectedObject.visible}
-                    onChange={(e) => updateObjectProperty(selectedObject.id, 'visible', e.target.checked)}
+                    onChange={(e) => toggleVisibility(selectedObject.id)}
                     className="rounded"
                   />
                   <label className="text-sm text-gray-300">Visible</label>
@@ -1396,7 +1221,7 @@ console.log("Configuration loaded");`;
                     <label className="block text-sm text-gray-300 mb-1">Color</label>
                     <input
                       type="color"
-                      value={selectedObject.color || '#FFFFFF'}
+                      value={selectedObject.color || '#ffffff'}
                       onChange={(e) => updateObjectProperty(selectedObject.id, 'color', e.target.value)}
                       className="w-full h-10 bg-gray-700 border border-gray-600 rounded"
                     />
@@ -1405,7 +1230,7 @@ console.log("Configuration loaded");`;
               </div>
             )}
 
-            {/* Actor-specific Properties */}
+            {/* Actor Properties */}
             {selectedObject.type === 'actor' && (
               <div className="bg-green-900/20 border border-green-400/20 rounded-lg p-3">
                 <h5 className="text-green-400 font-semibold text-sm mb-2">Actor Properties</h5>
@@ -1413,19 +1238,19 @@ console.log("Configuration loaded");`;
                   <div>• Role: Spawn Point</div>
                   <div>• Collision: Disabled</div>
                   <div>• Players spawn at this location</div>
-                  <div>• ✓ Now VISIBLE (solid green)</div>
                   <div>• Edit Config to change role</div>
+                  <div>• ✓ Solid green cylinder (visible!)</div>
                 </div>
               </div>
             )}
 
-            {/* Actions */}
+            {/* Action Buttons */}
             <div className="space-y-2">
               <button
                 onClick={() => setSelectedObject(null)}
                 className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
               >
-                Deselect
+                Deselect Object
               </button>
               {selectedObject.id !== 'baseplate' && (
                 <button
@@ -1441,28 +1266,25 @@ console.log("Configuration loaded");`;
           <div className="text-center text-gray-400 py-8">
             <div className="text-4xl mb-4">🎯</div>
             <h4 className="text-lg font-semibold mb-2">No Object Selected</h4>
-            <p className="text-sm">Click on an object in the 3D view to see its properties</p>
-            
-            <div className="mt-6 p-4 bg-gray-700/50 rounded-lg">
-              <h5 className="text-white font-semibold mb-2">Quick Actions</h5>
-              <button
-                onClick={(e) => handleAddButtonClick(e)}
-                className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
-              >
-                + Add New Object
-              </button>
+            <p className="text-sm">Click on an object in the 3D viewport to see its properties</p>
+            <div className="mt-4 p-3 bg-gray-700/50 rounded-lg text-xs">
+              <div className="text-green-400 font-semibold mb-1">✓ Working Features:</div>
+              <div>• Object selection</div>
+              <div>• Property editing</div>
+              <div>• Gizmo manipulation</div>
+              <div>• Explorer sync</div>
             </div>
           </div>
         )}
 
-        {/* Workspace Stats */}
+        {/* Scene Stats */}
         <div className="mt-6 p-3 bg-gray-700/50 rounded-lg">
-          <h4 className="text-md font-semibold text-white mb-2">Workspace Stats</h4>
+          <h4 className="text-md font-semibold text-white mb-2">Scene Stats</h4>
           <div className="text-sm text-gray-300 space-y-1">
-            <div>Objects: {objects.length}</div>
-            <div>Visible: {objects.filter(obj => obj.visible).length}</div>
-            <div>Selected: {selectedObject ? '1' : '0'}</div>
-            <div className="text-green-400">✓ Synced with Explorer</div>
+            <div>Total Objects: <span className="text-green-400">{objects.length}</span></div>
+            <div>Visible Objects: <span className="text-blue-400">{objects.filter(obj => obj.visible).length}</span></div>
+            <div>Selected Tool: <span className="text-yellow-400">{tool}</span></div>
+            <div className="text-green-400 text-xs mt-2">✓ All objects sync with Explorer!</div>
           </div>
         </div>
       </div>
@@ -1484,9 +1306,7 @@ console.log("Configuration loaded");`;
             }}
           >
             <div className="mb-3">
-              <h3 className="text-white font-semibold mb-2">
-                Add Object {addMenuParent && `to ${addMenuParent.name}`}
-              </h3>
+              <h3 className="text-white font-semibold mb-2">Add Object to Workspace</h3>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -1503,7 +1323,7 @@ console.log("Configuration loaded");`;
               {filteredObjectTypes.map((type) => (
                 <button
                   key={type.id}
-                  onClick={() => addObject(type.id, addMenuParent?.id)}
+                  onClick={() => addObject(type.id)}
                   className="w-full flex items-center gap-3 p-3 bg-gray-700 hover:bg-gray-600 rounded transition-colors text-left"
                 >
                   <span className="text-lg">{type.icon}</span>

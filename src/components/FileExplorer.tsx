@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Folder, FileText, Database, Volume2, Image, Box, Monitor, Plus, MoreHorizontal, AlertTriangle, Settings, Search, Edit2, Trash2, User } from 'lucide-react';
 
 interface FileExplorerProps {
@@ -38,6 +38,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
   const [draggedItem, setDraggedItem] = useState<any>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
   const dragCounter = useRef(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const hasThreeDStorage = installedPlugins.some(plugin => plugin.name === 'THREEDStorage');
 
@@ -74,7 +75,20 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
     });
   };
 
+  // CRITICAL: Set up global update function for workspace editor
+  useEffect(() => {
+    window.updateFileExplorer = () => {
+      setRefreshKey(prev => prev + 1);
+    };
+    
+    return () => {
+      delete window.updateFileExplorer;
+    };
+  }, []);
+
   function buildServicesFromProject() {
+    console.log('[EXPLORER] Building services from project, workspace objects:', project.services.workspace.objects);
+    
     const services = [
       {
         id: 'workspace',
@@ -90,7 +104,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             icon: <Box className="w-4 h-4 text-indigo-400" />
           },
           // CRITICAL FIX: Add ALL workspace objects directly here so they appear in the explorer AND game
-          ...project.services.workspace.objects.map((obj: any) => ({
+          ...(project.services.workspace.objects || []).map((obj: any) => ({
             ...obj,
             icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : 
                   obj.type === 'actor' ? <User className="w-4 h-4 text-green-400" /> :
@@ -233,10 +247,17 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
       });
     }
 
+    console.log('[EXPLORER] Built services with workspace objects:', services[0].children);
     return services;
-  };
+  }
 
   const [services, setServices] = useState(() => buildServicesFromProject());
+
+  // CRITICAL: Rebuild services when project changes or refresh key changes
+  useEffect(() => {
+    console.log('[EXPLORER] Rebuilding services due to project/refresh change');
+    setServices(buildServicesFromProject());
+  }, [project, refreshKey, installedPlugins]);
 
   const addObjectToHierarchy = (type: string, parentPath: string[]) => {
     const newObject = {

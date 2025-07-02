@@ -59,7 +59,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       }
 
       const [projects, publicProjs, newsItems] = await Promise.all([
-        db.getUserProjects(user.id),
+        db.getUserProjects(String(user.id)),
         db.getPublicProjects(),
         db.getAllNews()
       ]);
@@ -84,7 +84,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       const forkedProject = await db.forkProject(
         project.id, 
-        user.id, 
+        String(user.id), 
         `${project.name} (Fork)`
       );
       setUserProjects(prev => [forkedProject, ...prev]);

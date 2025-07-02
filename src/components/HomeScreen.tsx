@@ -43,6 +43,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const loadData = async () => {
     try {
+      // Validate user and user.id before making database calls
+      if (!user || !user.id || typeof user.id !== 'string' || user.id.trim() === '') {
+        console.error('Invalid user ID:', user?.id);
+        setIsLoading(false);
+        return;
+      }
+
       const [projects, publicProjs, newsItems] = await Promise.all([
         db.getUserProjects(user.id),
         db.getPublicProjects(),
@@ -61,6 +68,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const handleForkProject = async (project: Project) => {
     try {
+      // Validate user ID before forking
+      if (!user || !user.id || typeof user.id !== 'string' || user.id.trim() === '') {
+        console.error('Invalid user ID for forking:', user?.id);
+        return;
+      }
+
       const forkedProject = await db.forkProject(
         project.id, 
         user.id, 
@@ -107,7 +120,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     <div className="space-y-8">
       {/* Welcome Section */}
       <div className="bg-gradient-to-r from-green-600 to-blue-600 rounded-2xl p-8 text-white">
-        <h1 className="text-3xl font-bold mb-2">Welcome back, {user.username}!</h1>
+        <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.username || 'User'}!</h1>
         <p className="text-green-100 mb-6">Ready to build something amazing today?</p>
         <button
           onClick={onCreateProject}
@@ -275,7 +288,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
             <input
               type="text"
-              value={user.username}
+              value={user?.username || ''}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
               readOnly
             />
@@ -284,7 +297,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
             <input
               type="email"
-              value={user.email}
+              value={user?.email || ''}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
               readOnly
             />
@@ -293,7 +306,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <label className="block text-sm font-medium text-gray-300 mb-2">Member Since</label>
             <input
               type="text"
-              value={new Date(user.createdAt).toLocaleDateString()}
+              value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : ''}
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
               readOnly
             />
@@ -335,7 +348,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <h1 className="text-2xl font-bold text-green-400">Virb.IO</h1>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-gray-300">Welcome, {user.username}</span>
+            <span className="text-gray-300">Welcome, {user?.username || 'User'}</span>
             <button
               onClick={onLogout}
               className="p-2 hover:bg-gray-700 rounded-lg transition-colors"

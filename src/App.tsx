@@ -3,16 +3,13 @@ import { FileExplorer } from './components/FileExplorer';
 import { CodeEditor } from './components/CodeEditor';
 import { AssetManager } from './components/AssetManager';
 import { PluginManager } from './components/PluginManager';
+import { ProjectManager } from './components/ProjectManager';
 import { LoadingScreen } from './components/LoadingScreen';
 import { UIEditor } from './components/UIEditor';
 import { GamePreview } from './components/GamePreview';
 import { WorkspaceEditor } from './components/WorkspaceEditor';
 import { Workspace2DEditor } from './components/Workspace2DEditor';
-import { AuthScreen } from './components/AuthScreen';
-import { HomeScreen } from './components/HomeScreen';
-import { ProjectCreationModal } from './components/ProjectCreationModal';
 import { Infinity, Play, Square, Settings, Database, X, Plus, File, FolderOpen, Save } from 'lucide-react';
-import { db, type User, type Project } from './services/database';
 
 interface OpenTab {
   id: string;
@@ -22,112 +19,22 @@ interface OpenTab {
 }
 
 function App() {
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [openTabs, setOpenTabs] = useState<OpenTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [activeTab, setActiveTab] = useState('explorer');
-  const [project, setProject] = useState<Project | null>(null);
+  const [project, setProject] = useState<any>(null);
   const [installedPlugins, setInstalledPlugins] = useState<any[]>([]);
   const [showFileMenu, setShowFileMenu] = useState(false);
 
   useEffect(() => {
-    initializeApp();
+    // Simulate loading
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 2000);
+    return () => clearTimeout(timer);
   }, []);
-
-  const initializeApp = async () => {
-    try {
-      await db.init();
-      
-      // Check for saved user session
-      const savedUser = localStorage.getItem('virbio_user');
-      if (savedUser) {
-        const userData = JSON.parse(savedUser);
-        const user = await db.getUserById(userData.id);
-        if (user) {
-          setUser(user);
-        } else {
-          localStorage.removeItem('virbio_user');
-        }
-      }
-    } catch (error) {
-      console.error('Failed to initialize app:', error);
-    } finally {
-      setIsInitializing(false);
-    }
-  };
-
-  const handleLogin = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('virbio_user', JSON.stringify({ id: userData.id }));
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    setProject(null);
-    setOpenTabs([]);
-    setActiveTabId(null);
-    setInstalledPlugins([]);
-    localStorage.removeItem('virbio_user');
-  };
-
-  const handleCreateProject = () => {
-    setShowProjectModal(true);
-  };
-
-  const handleProjectCreated = async (projectData: Project) => {
-    setShowProjectModal(false);
-    setIsLoading(true);
-    
-    // Simulate loading screen
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setProject(projectData);
-    
-    // Set default plugins based on project type
-    let defaultPlugins: any[] = [];
-    
-    if (projectData.type === 'game3d') {
-      defaultPlugins = [
-        { id: 1, name: 'THREEDStorage', version: '1.2.0', enabled: true, author: 'Virb.IO Team', category: '3D' }
-      ];
-    } else if (projectData.type === 'webapp') {
-      defaultPlugins = [
-        { id: 2, name: 'Advanced Syntax Highlighter', version: '2.1.4', enabled: true, author: 'Community', category: 'Editor' }
-      ];
-    }
-    
-    setInstalledPlugins(defaultPlugins);
-    setIsLoading(false);
-  };
-
-  const handleOpenProject = async (projectData: Project) => {
-    setIsLoading(true);
-    
-    // Simulate loading screen
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    setProject(projectData);
-    
-    // Set plugins based on project type
-    let defaultPlugins: any[] = [];
-    
-    if (projectData.type === 'game3d') {
-      defaultPlugins = [
-        { id: 1, name: 'THREEDStorage', version: '1.2.0', enabled: true, author: 'Virb.IO Team', category: '3D' }
-      ];
-    } else if (projectData.type === 'webapp') {
-      defaultPlugins = [
-        { id: 2, name: 'Advanced Syntax Highlighter', version: '2.1.4', enabled: true, author: 'Community', category: 'Editor' }
-      ];
-    }
-    
-    setInstalledPlugins(defaultPlugins);
-    setIsLoading(false);
-  };
 
   useEffect(() => {
     // Auto-open workspace for game projects
@@ -158,7 +65,7 @@ function App() {
     if (!project) return 'OFF';
     
     // Find workspace config
-    const workspaceConfig = project.data?.workspace?.objects?.find((obj: any) => obj.type === 'config');
+    const workspaceConfig = project.services.workspace.objects.find((obj: any) => obj.type === 'config');
     if (workspaceConfig && workspaceConfig.content) {
       // Look for the DisplayMode setting in the config content
       const match = workspaceConfig.content.match(/workspace\.DisplayMode\s*=\s*"([^"]+)"/);
@@ -172,6 +79,10 @@ function App() {
     if (project.type === 'game2d') return 'TWOD';
     return 'OFF';
   };
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
 
   const handleFileSelect = (file: any) => {
     // Check if this is a workspace folder or workspace object
@@ -230,60 +141,43 @@ function App() {
     setIsRunning(!isRunning);
   };
 
+  const handleCreateProject = (projectData: any) => {
+    setProject(projectData);
+    
+    // Set default plugins based on project type
+    let defaultPlugins: any[] = [];
+    
+    if (projectData.type === 'game3d') {
+      defaultPlugins = [
+        { id: 1, name: 'THREEDStorage', version: '1.2.0', enabled: true, author: 'Virb.IO Team', category: '3D' }
+      ];
+    } else if (projectData.type === 'webapp') {
+      defaultPlugins = [
+        { id: 2, name: 'Advanced Syntax Highlighter', version: '2.1.4', enabled: true, author: 'Community', category: 'Editor' }
+      ];
+    }
+    
+    setInstalledPlugins(defaultPlugins);
+  };
+
   const handleInstallPlugin = (plugin: any) => {
     setInstalledPlugins(prev => [...prev, { ...plugin, enabled: true }]);
   };
 
-  const handleSaveProject = async () => {
-    if (!project) return;
-    
-    try {
-      await db.updateProject(project.id, {
-        data: project.data,
-        updatedAt: new Date().toISOString()
-      });
-      console.log('Project saved successfully');
-    } catch (error) {
-      console.error('Error saving project:', error);
-    }
-  };
-
-  const handleBackToHome = () => {
+  const handleNewProject = () => {
     setProject(null);
     setOpenTabs([]);
     setActiveTabId(null);
     setInstalledPlugins([]);
   };
 
-  // Show loading screen during initialization or project loading
-  if (isInitializing || isLoading) {
-    return <LoadingScreen />;
-  }
+  const handleSaveProject = () => {
+    console.log('Saving project:', project.name);
+    // Implement save functionality
+  };
 
-  // Show auth screen if no user is logged in
-  if (!user) {
-    return <AuthScreen onLogin={handleLogin} />;
-  }
-
-  // Show home screen if no project is open
   if (!project) {
-    return (
-      <>
-        <HomeScreen 
-          user={user}
-          onCreateProject={handleCreateProject}
-          onOpenProject={handleOpenProject}
-          onLogout={handleLogout}
-        />
-        {showProjectModal && (
-          <ProjectCreationModal
-            user={user}
-            onClose={() => setShowProjectModal(false)}
-            onProjectCreated={handleProjectCreated}
-          />
-        )}
-      </>
-    );
+    return <ProjectManager onCreateProject={handleCreateProject} />;
   }
 
   const renderMainContent = () => {
@@ -326,13 +220,10 @@ function App() {
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleBackToHome}
-            className="flex items-center gap-2 hover:bg-gray-700 px-2 py-1 rounded transition-colors"
-          >
+          <div className="flex items-center gap-2">
             <Infinity className="w-6 h-6 text-green-400" />
             <span className="text-xl font-bold text-green-400">Virb.IO</span>
-          </button>
+          </div>
           <span className="text-gray-400">|</span>
           
           {/* File Menu */}
@@ -346,14 +237,14 @@ function App() {
             {showFileMenu && (
               <div className="absolute top-full left-0 mt-1 bg-gray-700 border border-gray-600 rounded-lg shadow-lg z-50 min-w-48">
                 <button
-                  onClick={handleBackToHome}
+                  onClick={handleNewProject}
                   className="w-full px-4 py-2 text-left hover:bg-gray-600 flex items-center gap-2 text-sm"
                 >
                   <Plus className="w-4 h-4" />
                   New Project
                 </button>
                 <button
-                  onClick={handleBackToHome}
+                  onClick={() => {/* Implement open */}}
                   className="w-full px-4 py-2 text-left hover:bg-gray-600 flex items-center gap-2 text-sm"
                 >
                   <FolderOpen className="w-4 h-4" />
@@ -457,7 +348,7 @@ function App() {
                   <h3 className="font-semibold">Database Manager</h3>
                 </div>
                 <div className="space-y-2">
-                  {project.data?.replicatedFirst?.databases?.map((db: any) => (
+                  {project.services.replicatedFirst.databases.map((db: any) => (
                     <div key={db.id} className="p-3 bg-gray-700 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
@@ -465,11 +356,7 @@ function App() {
                       </div>
                       <p className="text-xs text-gray-400">Database connection</p>
                     </div>
-                  )) || (
-                    <div className="text-center text-gray-400 py-4">
-                      <p>No databases configured</p>
-                    </div>
-                  )}
+                  ))}
                   <button className="w-full p-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm transition-colors">
                     New Database
                   </button>
@@ -524,9 +411,8 @@ function App() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-4 text-gray-400">
-          <span>User: {user.username}</span>
-          <span>Virb.IO v2.0.0</span>
+        <div className="text-gray-400">
+          Virb.IO v1.0.0
         </div>
       </footer>
     </div>

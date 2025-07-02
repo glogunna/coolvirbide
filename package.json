@@ -15,7 +15,9 @@
     "react-dom": "^18.3.1",
     "three": "^0.160.0",
     "@types/three": "^0.160.0",
-    "prismjs": "^1.29.0"
+    "prismjs": "^1.29.0",
+    "sqlite3": "^5.1.6",
+    "better-sqlite3": "^9.2.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

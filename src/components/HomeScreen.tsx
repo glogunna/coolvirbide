@@ -16,10 +16,10 @@ import {
   Settings,
   LogOut
 } from 'lucide-react';
-import { db, type User, type Project, type NewsItem } from '../services/database';
+import { db, User as DatabaseUser, Project, NewsItem } from '../services/database';
 
 interface HomeScreenProps {
-  user: User;
+  user: DatabaseUser;
   onCreateProject: () => void;
   onOpenProject: (project: Project) => void;
   onLogout: () => void;

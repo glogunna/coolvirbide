@@ -52,6 +52,53 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     type.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // CRITICAL: Define highlightObject function at component level
+  const highlightObject = (object: THREE.Object3D) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    clearHighlights();
+    
+    // Create outline effect
+    const outlineGeometry = object.geometry.clone();
+    const outlineMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0x10B981, 
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0.3
+    });
+    const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
+    outline.position.copy(object.position);
+    outline.rotation.copy(object.rotation);
+    outline.scale.copy(object.scale).multiplyScalar(1.05);
+    outline.name = 'outline';
+    scene.add(outline);
+
+    // Add transform gizmos based on current tool
+    addTransformGizmos(object);
+  };
+
+  const clearHighlights = () => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    const outlines = scene.children.filter(obj => obj.name === 'outline');
+    outlines.forEach(outline => scene.remove(outline));
+    
+    const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
+    gizmos.forEach(gizmo => scene.remove(gizmo));
+  };
+
+  const addTransformGizmos = (object: THREE.Object3D) => {
+    if (tool === 'move') {
+      addMoveGizmos(object);
+    } else if (tool === 'rotate') {
+      addRotateGizmos(object);
+    } else if (tool === 'scale') {
+      addScaleGizmos(object);
+    }
+  };
+
   // CRITICAL: Listen for explorer selections
   useEffect(() => {
     const handleExplorerSelection = (event: CustomEvent) => {
@@ -257,36 +304,6 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
       }
     };
 
-    const highlightObject = (object: THREE.Object3D) => {
-      clearHighlights();
-      
-      // Create outline effect
-      const outlineGeometry = object.geometry.clone();
-      const outlineMaterial = new THREE.MeshBasicMaterial({ 
-        color: 0x10B981, 
-        side: THREE.BackSide,
-        transparent: true,
-        opacity: 0.3
-      });
-      const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
-      outline.position.copy(object.position);
-      outline.rotation.copy(object.rotation);
-      outline.scale.copy(object.scale).multiplyScalar(1.05);
-      outline.name = 'outline';
-      scene.add(outline);
-
-      // Add transform gizmos based on current tool
-      addTransformGizmos(object);
-    };
-
-    const clearHighlights = () => {
-      const outlines = scene.children.filter(obj => obj.name === 'outline');
-      outlines.forEach(outline => scene.remove(outline));
-      
-      const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
-      gizmos.forEach(gizmo => scene.remove(gizmo));
-    };
-
     const updateGizmoPositions = (object: THREE.Object3D) => {
       const gizmos = scene.children.filter(obj => obj.userData.isGizmo);
       gizmos.forEach(gizmo => {
@@ -302,120 +319,6 @@ export const WorkspaceEditor: React.FC<WorkspaceEditorProps> = ({ project }) => 
     const updateOutlinePosition = (object: THREE.Object3D) => {
       const outlines = scene.children.filter(obj => obj.name === 'outline');
       outlines.forEach(outline => outline.position.copy(object.position));
-    };
-
-    const addTransformGizmos = (object: THREE.Object3D) => {
-      if (tool === 'move') {
-        addMoveGizmos(object);
-      } else if (tool === 'rotate') {
-        addRotateGizmos(object);
-      } else if (tool === 'scale') {
-        addScaleGizmos(object);
-      }
-    };
-
-    const addMoveGizmos = (object: THREE.Object3D) => {
-      const arrowLength = 2;
-      const arrowRadius = 0.1;
-      
-      // X axis (red)
-      const xArrowGeometry = new THREE.ConeGeometry(arrowRadius * 2, arrowLength * 0.3, 8);
-      const xArrowMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-      const xArrow = new THREE.Mesh(xArrowGeometry, xArrowMaterial);
-      xArrow.position.copy(object.position);
-      xArrow.position.x += arrowLength;
-      xArrow.rotation.z = -Math.PI / 2;
-      xArrow.name = 'move-gizmo-x';
-      xArrow.userData = { isGizmo: true, axis: 'x' };
-      scene.add(xArrow);
-
-      // Y axis (green)
-      const yArrowGeometry = new THREE.ConeGeometry(arrowRadius * 2, arrowLength * 0.3, 8);
-      const yArrowMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-      const yArrow = new THREE.Mesh(yArrowGeometry, yArrowMaterial);
-      yArrow.position.copy(object.position);
-      yArrow.position.y += arrowLength;
-      yArrow.name = 'move-gizmo-y';
-      yArrow.userData = { isGizmo: true, axis: 'y' };
-      scene.add(yArrow);
-
-      // Z axis (blue)
-      const zArrowGeometry = new THREE.ConeGeometry(arrowRadius * 2, arrowLength * 0.3, 8);
-      const zArrowMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-      const zArrow = new THREE.Mesh(zArrowGeometry, zArrowMaterial);
-      zArrow.position.copy(object.position);
-      zArrow.position.z += arrowLength;
-      zArrow.rotation.x = Math.PI / 2;
-      zArrow.name = 'move-gizmo-z';
-      zArrow.userData = { isGizmo: true, axis: 'z' };
-      scene.add(zArrow);
-    };
-
-    const addRotateGizmos = (object: THREE.Object3D) => {
-      const radius = 2;
-      
-      // X axis rotation ring (red)
-      const xRingGeometry = new THREE.TorusGeometry(radius, 0.05, 8, 32);
-      const xRingMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-      const xRing = new THREE.Mesh(xRingGeometry, xRingMaterial);
-      xRing.position.copy(object.position);
-      xRing.rotation.y = Math.PI / 2;
-      xRing.name = 'rotate-gizmo-x';
-      xRing.userData = { isGizmo: true, axis: 'x' };
-      scene.add(xRing);
-
-      // Y axis rotation ring (green)
-      const yRingGeometry = new THREE.TorusGeometry(radius, 0.05, 8, 32);
-      const yRingMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-      const yRing = new THREE.Mesh(yRingGeometry, yRingMaterial);
-      yRing.position.copy(object.position);
-      yRing.rotation.x = Math.PI / 2;
-      yRing.name = 'rotate-gizmo-y';
-      yRing.userData = { isGizmo: true, axis: 'y' };
-      scene.add(yRing);
-
-      // Z axis rotation ring (blue)
-      const zRingGeometry = new THREE.TorusGeometry(radius, 0.05, 8, 32);
-      const zRingMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-      const zRing = new THREE.Mesh(zRingGeometry, zRingMaterial);
-      zRing.position.copy(object.position);
-      zRing.name = 'rotate-gizmo-z';
-      zRing.userData = { isGizmo: true, axis: 'z' };
-      scene.add(zRing);
-    };
-
-    const addScaleGizmos = (object: THREE.Object3D) => {
-      const cubeSize = 0.2;
-      
-      // X axis (red)
-      const xCubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-      const xCubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-      const xCube = new THREE.Mesh(xCubeGeometry, xCubeMaterial);
-      xCube.position.copy(object.position);
-      xCube.position.x += 2;
-      xCube.name = 'scale-gizmo-x';
-      xCube.userData = { isGizmo: true, axis: 'x' };
-      scene.add(xCube);
-
-      // Y axis (green)
-      const yCubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-      const yCubeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-      const yCube = new THREE.Mesh(yCubeGeometry, yCubeMaterial);
-      yCube.position.copy(object.position);
-      yCube.position.y += 2;
-      yCube.name = 'scale-gizmo-y';
-      yCube.userData = { isGizmo: true, axis: 'y' };
-      scene.add(yCube);
-
-      // Z axis (blue)
-      const zCubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-      const zCubeMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-      const zCube = new THREE.Mesh(zCubeGeometry, zCubeMaterial);
-      zCube.position.copy(object.position);
-      zCube.position.z += 2;
-      zCube.name = 'scale-gizmo-z';
-      zCube.userData = { isGizmo: true, axis: 'z' };
-      scene.add(zCube);
     };
 
     const onWheel = (event: WheelEvent) => {

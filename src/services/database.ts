@@ -310,6 +310,12 @@ class DatabaseService {
   async getUserProjects(userId: string): Promise<Project[]> {
     if (!this.db) throw new Error('Database not initialized');
 
+    // Add explicit validation for userId to prevent IndexedDB errors
+    if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+      console.warn('Invalid userId provided to getUserProjects:', userId);
+      return [];
+    }
+
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(['projects'], 'readonly');
       const store = transaction.objectStore('projects');

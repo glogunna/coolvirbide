@@ -377,7 +377,6 @@ console.log("Ploid configured successfully");`;
 // WARNING: Modifying this script may cause player movement issues!
 
 const input = player.input;
-const character = player.CharacterModel;
 const ploidConfig = character.Ploid.Config;
 
 const keysPressed = {};
@@ -415,7 +414,6 @@ inputService.onKeyUp(onKeyUp);`;
 // WARNING: Modifying this script may cause camera issues!
 
 const camera = inst('Workspace.Camera');
-const character = player.CharacterModel;
 const mouse = player.Mouse;
 
 let cameraType = "ThirdPerson"; // "ThirdPerson", "FirstPerson", "TopDown"
@@ -463,7 +461,6 @@ mouse.onMove(onMouseMove);`;
         return `// Movement Controller (Home Script)
 // WARNING: Modifying this script may cause movement issues!
 
-const character = player.CharacterModel;
 const ploidConfig = character.Ploid.Config;
 
 const velocity = { x: 0, y: 0, z: 0 };

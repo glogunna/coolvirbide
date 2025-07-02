@@ -164,40 +164,40 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onCreateProject 
   };
 
   const getWorkspaceConfig = (mode: string) => {
-    return `-- Workspace Configuration
--- This script configures the workspace display mode
+    return `// Workspace Configuration
+// This script configures the workspace display mode
 
-inst workspace = script.Parent
+const workspace = inst('script.Parent');
 
--- Workspace Display Mode
--- THREED: 3D workspace with 3D objects and camera
--- TWOD: 2D workspace with 2D sprites and top-down view  
--- OFF: No workspace display (for web applications)
-workspace.DisplayMode = "${mode}"
+// Workspace Display Mode
+// THREED: 3D workspace with 3D objects and camera
+// TWOD: 2D workspace with 2D sprites and top-down view  
+// OFF: No workspace display (for web applications)
+workspace.DisplayMode = "${mode}";
 
--- Workspace Properties
-workspace.Name = "Workspace"
-workspace.Enabled = ${mode !== 'OFF' ? 'true' : 'false'}
+// Workspace Properties
+workspace.Name = "Workspace";
+workspace.Enabled = ${mode !== 'OFF' ? 'true' : 'false'};
 
--- Camera Settings (for 3D and 2D modes)
-if workspace.DisplayMode == "THREED\" then
-    workspace.Camera.Type = "Perspective"
-    workspace.Camera.Position = { x: 10, y: 10, z: 10 }
-    workspace.Camera.LookAt = { x: 0, y: 0, z: 0 }
-    workspace.Physics.Enabled = true
-    workspace.Physics.Gravity = { x: 0, y: -50, z: 0 }
-elseif workspace.DisplayMode == "TWOD\" then
-    workspace.Camera.Type = "Orthographic"
-    workspace.Camera.Position = { x: 0, y: 0, z: 10 }
-    workspace.Camera.LookAt = { x: 0, y: 0, z: 0 }
-    workspace.Physics.Enabled = true
-    workspace.Physics.Gravity = { x: 0, y: -50, z: 0 }
-else
-    workspace.Camera.Enabled = false
-    workspace.Physics.Enabled = false
-end
+// Camera Settings (for 3D and 2D modes)
+if (workspace.DisplayMode === "THREED") {
+    workspace.Camera.Type = "Perspective";
+    workspace.Camera.Position = { x: 10, y: 10, z: 10 };
+    workspace.Camera.LookAt = { x: 0, y: 0, z: 0 };
+    workspace.Physics.Enabled = true;
+    workspace.Physics.Gravity = { x: 0, y: -50, z: 0 };
+} else if (workspace.DisplayMode === "TWOD") {
+    workspace.Camera.Type = "Orthographic";
+    workspace.Camera.Position = { x: 0, y: 0, z: 10 };
+    workspace.Camera.LookAt = { x: 0, y: 0, z: 0 };
+    workspace.Physics.Enabled = true;
+    workspace.Physics.Gravity = { x: 0, y: -50, z: 0 };
+} else {
+    workspace.Camera.Enabled = false;
+    workspace.Physics.Enabled = false;
+}
 
-print("Workspace configured for " + workspace.DisplayMode + " mode")`;
+console.log("Workspace configured for " + workspace.DisplayMode + " mode");`;
   };
 
   const getTemplateScript = (projectType: string, scriptType: string) => {
@@ -205,346 +205,346 @@ print("Workspace configured for " + workspace.DisplayMode + " mode")`;
       case 'gameManager':
         if (projectType === 'webapp') {
           return `// Web Application Manager
-inst apiService = game.APIService
-inst database = DataVault.AppData
+const apiService = inst('game.APIService');
+const database = inst('DataVault.AppData');
 
 function initApp() {
-    print("Initializing Web Application...")
+    console.log("Initializing Web Application...");
     
     // Setup API endpoints
-    apiService.createEndpoint("/api/users", handleUsers)
-    apiService.createEndpoint("/api/data", handleData)
+    apiService.createEndpoint("/api/users", handleUsers);
+    apiService.createEndpoint("/api/data", handleData);
     
     // Connect to database
-    database.connect()
+    database.connect();
     
     // Initialize UI
-    inst mainUI = UIService.MainApp
-    mainUI.show()
+    const mainUI = inst('UIService.MainApp');
+    mainUI.show();
 }
 
 function handleUsers(request) {
     // Handle user requests
-    return { status: "success", users: database.getUsers() }
+    return { status: "success", users: database.getUsers() };
 }
 
 function handleData(request) {
     // Handle data requests
-    return { status: "success", data: database.getData() }
+    return { status: "success", data: database.getData() };
 }
 
-game.onStart(initApp)`;
+game.onStart(initApp);`;
         } else if (projectType === 'game3d') {
           return `// 3D Game Manager
-inst camera = Workspace.Camera
-inst baseplate = Workspace.Baseplate
+const camera = inst('Workspace.Camera');
+const baseplate = inst('Workspace.Baseplate');
 
 function initGame() {
-    print("Initializing 3D Game...")
+    console.log("Initializing 3D Game...");
     
     // Setup 3D environment
-    camera.position = { x: 0, y: 10, z: 20 }
-    camera.lookAt({ x: 0, y: 0, z: 0 })
+    camera.position = { x: 0, y: 10, z: 20 };
+    camera.lookAt({ x: 0, y: 0, z: 0 });
     
     // Initialize physics
-    baseplate.enableCollision(true)
+    baseplate.enableCollision(true);
     
     // Setup lighting
-    inst lighting = game.Lighting
-    lighting.ambient = 0.6
-    lighting.directional = 0.8
+    const lighting = inst('game.Lighting');
+    lighting.ambient = 0.6;
+    lighting.directional = 0.8;
 }
 
-game.onStart(initGame)`;
+game.onStart(initGame);`;
         } else if (projectType === 'game2d') {
           return `// 2D Game Manager
-inst ground = Workspace.Ground
+const ground = inst('Workspace.Ground');
 
 function initGame() {
-    print("Initializing 2D Game...")
+    console.log("Initializing 2D Game...");
     
     // Setup 2D physics
-    ground.enableCollision2D(true)
+    ground.enableCollision2D(true);
     
     // Setup camera
-    inst camera = Workspace.Camera
-    camera.mode = "2D"
+    const camera = inst('Workspace.Camera');
+    camera.mode = "2D";
 }
 
-game.onStart(initGame)`;
+game.onStart(initGame);`;
         }
         break;
       case 'serverInit':
         if (projectType === 'webapp') {
           return `// Server Initialization
-inst appManager = SharedStorage.Scripts.AppManager
+const appManager = inst('SharedStorage.Scripts.AppManager');
 
 function onServerStart() {
-    print("Server starting...")
-    appManager.initApp()
+    console.log("Server starting...");
+    appManager.initApp();
 }
 
 function onUserConnect(user) {
-    print("User connected: " + user.name)
+    console.log("User connected: " + user.name);
     
     // Setup user data
-    inst appData = DataVault.AppData
-    appData.createUser(user.id, user.name)
+    const appData = inst('DataVault.AppData');
+    appData.createUser(user.id, user.name);
 }
 
-game.onServerStart(onServerStart)
-game.onUserConnect(onUserConnect)`;
+game.onServerStart(onServerStart);
+game.onUserConnect(onUserConnect);`;
         } else {
           return `// Server Initialization
-inst gameManager = SharedStorage.Scripts.GameManager
+const gameManager = inst('SharedStorage.Scripts.GameManager');
 
 function onServerStart() {
-    print("Server starting...")
-    gameManager.initGame()
+    console.log("Server starting...");
+    gameManager.initGame();
 }
 
 function onPlayerJoin(player) {
-    print("Player joined: " + player.name)
+    console.log("Player joined: " + player.name);
     
     // Setup player data
-    inst playerData = DataVault.PlayerData
-    playerData.createPlayer(player.id, player.name)
+    const playerData = inst('DataVault.PlayerData');
+    playerData.createPlayer(player.id, player.name);
     
     // Spawn player with starter character
-    inst starterChar = PrivateStorage.Character1
-    player.spawn(starterChar)
+    const starterChar = inst('PrivateStorage.Character1');
+    player.spawn(starterChar);
 }
 
-game.onServerStart(onServerStart)
-game.onPlayerJoin(onPlayerJoin)`;
+game.onServerStart(onServerStart);
+game.onPlayerJoin(onPlayerJoin);`;
         }
       case 'ploidConfig':
-        return `-- Ploid Configuration Script
--- This script configures the Ploid (Character Controller)
+        return `// Ploid Configuration Script
+// This script configures the Ploid (Character Controller)
 
-inst ploid = script.Parent
+const ploid = inst('script.Parent');
 
--- Player Owner Reference (set by the game engine)
-ploid.PlayerOwner = nil  -- Will be set when player spawns
+// Player Owner Reference (set by the game engine)
+ploid.PlayerOwner = null;  // Will be set when player spawns
 
--- Health Properties
-ploid.MaxHealth = 100
-ploid.Health = 100
+// Health Properties
+ploid.MaxHealth = 100;
+ploid.Health = 100;
 
--- Movement Properties
-ploid.WalkSpeed = 16
-ploid.RunSpeed = 24
-ploid.JumpPower = 50
+// Movement Properties
+ploid.WalkSpeed = 16;
+ploid.RunSpeed = 24;
+ploid.JumpPower = 50;
 
--- Physics Properties
-ploid.Mass = 1
-ploid.Friction = 0.8
-ploid.Elasticity = 0.2
+// Physics Properties
+ploid.Mass = 1;
+ploid.Friction = 0.8;
+ploid.Elasticity = 0.2;
 
--- Functions
-function ploid.TakeDamage(amount)
-    ploid.Health = math.max(0, ploid.Health - amount)
-    if ploid.Health <= 0 then
-        ploid.OnDied:Fire()
-    end
-    ploid.HealthChanged:Fire(ploid.Health, ploid.MaxHealth)
-end
+// Functions
+ploid.TakeDamage = function(amount) {
+    ploid.Health = Math.max(0, ploid.Health - amount);
+    if (ploid.Health <= 0) {
+        ploid.OnDied.Fire();
+    }
+    ploid.HealthChanged.Fire(ploid.Health, ploid.MaxHealth);
+};
 
-function ploid.Heal(amount)
-    ploid.Health = math.min(ploid.MaxHealth, ploid.Health + amount)
-    ploid.HealthChanged:Fire(ploid.Health, ploid.MaxHealth)
-end
+ploid.Heal = function(amount) {
+    ploid.Health = Math.min(ploid.MaxHealth, ploid.Health + amount);
+    ploid.HealthChanged.Fire(ploid.Health, ploid.MaxHealth);
+};
 
-function ploid.SetWalkSpeed(speed)
-    ploid.WalkSpeed = speed
-    ploid.WalkSpeedChanged:Fire(speed)
-end
+ploid.SetWalkSpeed = function(speed) {
+    ploid.WalkSpeed = speed;
+    ploid.WalkSpeedChanged.Fire(speed);
+};
 
-function ploid.SetJumpPower(power)
-    ploid.JumpPower = power
-    ploid.JumpPowerChanged:Fire(power)
-end
+ploid.SetJumpPower = function(power) {
+    ploid.JumpPower = power;
+    ploid.JumpPowerChanged.Fire(power);
+};
 
--- Events
-ploid.HealthChanged = game.CreateEvent()
-ploid.WalkSpeedChanged = game.CreateEvent()
-ploid.JumpPowerChanged = game.CreateEvent()
-ploid.OnDied = game.CreateEvent()
+// Events
+ploid.HealthChanged = game.CreateEvent();
+ploid.WalkSpeedChanged = game.CreateEvent();
+ploid.JumpPowerChanged = game.CreateEvent();
+ploid.OnDied = game.CreateEvent();
 
-print("Ploid configured successfully")`;
+console.log("Ploid configured successfully");`;
       case 'inputHandler':
-        return `-- Input Handler (Home Script)
--- WARNING: Modifying this script may cause player movement issues!
+        return `// Input Handler (Home Script)
+// WARNING: Modifying this script may cause player movement issues!
 
-inst player = script.parent.Ploid.PlayerOwner
-inst input = player.input
-inst character = player.CharacterModel
-inst ploidConfig = character.Ploid.Config
+const player = inst('script.parent.Ploid.PlayerOwner');
+const input = player.input;
+const character = player.CharacterModel;
+const ploidConfig = character.Ploid.Config;
 
-inst keysPressed = {}
+const keysPressed = {};
 
 function onKeyDown(key) {
-    keysPressed[key] = true
+    keysPressed[key] = true;
     
-    if key == "W\" then
-        character.moveForward(ploidConfig.WalkSpeed)
-    elseif key == "S\" then
-        character.moveBackward(ploidConfig.WalkSpeed)
-    elseif key == "A\" then
-        character.moveLeft(ploidConfig.WalkSpeed)
-    elseif key == "D\" then
-        character.moveRight(ploidConfig.WalkSpeed)
-    elseif key == "Space\" then
-        character.jump(ploidConfig.JumpPower)
-    end
+    if (key === "w") {
+        character.moveForward(ploidConfig.WalkSpeed);
+    } else if (key === "s") {
+        character.moveBackward(ploidConfig.WalkSpeed);
+    } else if (key === "a") {
+        character.moveLeft(ploidConfig.WalkSpeed);
+    } else if (key === "d") {
+        character.moveRight(ploidConfig.WalkSpeed);
+    } else if (key === " ") {
+        character.jump(ploidConfig.JumpPower);
+    }
 }
 
 function onKeyUp(key) {
-    keysPressed[key] = false
+    keysPressed[key] = false;
     
-    if key == "W\" or key == "S\" then
-        character.stopMovingForward()
-    elseif key == "A\" or key == "D\" then
-        character.stopMovingLeft()
-    end
+    if (key === "w" || key === "s") {
+        character.stopMovingForward();
+    } else if (key === "a" || key === "d") {
+        character.stopMovingLeft();
+    }
 }
 
-inputService.onKeyDown(onKeyDown)
-inputService.onKeyUp(onKeyUp)`;
+inputService.onKeyDown(onKeyDown);
+inputService.onKeyUp(onKeyUp);`;
       case 'cameraController':
-        return `-- Camera Controller (Home Script)
--- WARNING: Modifying this script may cause camera issues!
+        return `// Camera Controller (Home Script)
+// WARNING: Modifying this script may cause camera issues!
 
-inst player = script.parent.Ploid.PlayerOwner
-inst camera = Workspace.Camera
-inst character = player.CharacterModel
-inst mouse = player.Mouse
+const player = inst('script.parent.Ploid.PlayerOwner');
+const camera = inst('Workspace.Camera');
+const character = player.CharacterModel;
+const mouse = player.Mouse;
 
-inst cameraType = "ThirdPerson" -- "ThirdPerson", "FirstPerson", "TopDown"
-inst sensitivity = 0.5
-inst distance = 20
+let cameraType = "ThirdPerson"; // "ThirdPerson", "FirstPerson", "TopDown"
+const sensitivity = 0.5;
+const distance = 20;
 
 function updateCamera() {
-    if cameraType == "ThirdPerson\" then
-        -- Third person camera
-        inst offset = { x: 0, y: 5, z: distance }
-        camera.position = character.position + offset
-        camera.lookAt(character.position)
-    elseif cameraType == "FirstPerson\" then
-        -- First person camera
-        camera.position = character.position + { x: 0, y: 1.5, z: 0 }
-        camera.rotation = character.rotation
-    elseif cameraType == "TopDown\" then
-        -- Top-down camera
-        camera.position = character.position + { x: 0, y: 30, z: 0 }
-        camera.lookAt(character.position)
-    end
+    if (cameraType === "ThirdPerson") {
+        // Third person camera
+        const offset = { x: 0, y: 5, z: distance };
+        camera.position = character.position + offset;
+        camera.lookAt(character.position);
+    } else if (cameraType === "FirstPerson") {
+        // First person camera
+        camera.position = character.position + { x: 0, y: 1.5, z: 0 };
+        camera.rotation = character.rotation;
+    } else if (cameraType === "TopDown") {
+        // Top-down camera
+        camera.position = character.position + { x: 0, y: 30, z: 0 };
+        camera.lookAt(character.position);
+    }
 }
 
 function onMouseMove(deltaX, deltaY) {
-    if cameraType == "ThirdPerson\" then
-        -- Rotate camera around character
-        camera.rotateAroundTarget(character.position, deltaX * sensitivity, deltaY * sensitivity)
-    elseif cameraType == "FirstPerson\" then
-        -- Rotate character
-        character.rotate(deltaX * sensitivity, deltaY * sensitivity)
-    end
+    if (cameraType === "ThirdPerson") {
+        // Rotate camera around character
+        camera.rotateAroundTarget(character.position, deltaX * sensitivity, deltaY * sensitivity);
+    } else if (cameraType === "FirstPerson") {
+        // Rotate character
+        character.rotate(deltaX * sensitivity, deltaY * sensitivity);
+    }
 }
 
 function setCameraType(newType) {
-    cameraType = newType
-    updateCamera()
+    cameraType = newType;
+    updateCamera();
 }
 
--- Expose camera controls
-character.SetCameraType = setCameraType
+// Expose camera controls
+character.SetCameraType = setCameraType;
 
-game.onHeartbeat(updateCamera)
-mouse.onMove(onMouseMove)`;
+game.onHeartbeat(updateCamera);
+mouse.onMove(onMouseMove);`;
       case 'movementController':
-        return `-- Movement Controller (Home Script)
--- WARNING: Modifying this script may cause movement issues!
+        return `// Movement Controller (Home Script)
+// WARNING: Modifying this script may cause movement issues!
 
-inst player = script.parent.Ploid.PlayerOwner
-inst character = player.CharacterModel
-inst ploidConfig = character.Ploid.Config
+const player = inst('script.parent.Ploid.PlayerOwner');
+const character = player.CharacterModel;
+const ploidConfig = character.Ploid.Config;
 
-inst velocity = { x: 0, y: 0, z: 0 }
-inst isGrounded = true
-inst gravity = -50
+const velocity = { x: 0, y: 0, z: 0 };
+let isGrounded = true;
+const gravity = -50;
 
 function updateMovement(deltaTime) {
-    -- Apply gravity
-    if not isGrounded then
-        velocity.y = velocity.y + gravity * deltaTime
-    end
+    // Apply gravity
+    if (!isGrounded) {
+        velocity.y = velocity.y + gravity * deltaTime;
+    }
     
-    -- Update position
-    character.position = character.position + velocity * deltaTime
+    // Update position
+    character.position = character.position + velocity * deltaTime;
     
-    -- Check ground collision
-    checkGroundCollision()
+    // Check ground collision
+    checkGroundCollision();
     
-    -- Apply friction
-    velocity.x = velocity.x * 0.9
-    velocity.z = velocity.z * 0.9
-end
+    // Apply friction
+    velocity.x = velocity.x * 0.9;
+    velocity.z = velocity.z * 0.9;
+}
 
 function checkGroundCollision() {
-    -- Simple ground check
-    if character.position.y <= 0 then
-        character.position.y = 0
-        velocity.y = 0
-        isGrounded = true
-    else
-        isGrounded = false
-    end
-end
+    // Simple ground check
+    if (character.position.y <= 0) {
+        character.position.y = 0;
+        velocity.y = 0;
+        isGrounded = true;
+    } else {
+        isGrounded = false;
+    }
+}
 
 function moveForward(speed) {
-    velocity.z = velocity.z - speed * 0.1
+    velocity.z = velocity.z - speed * 0.1;
 }
 
 function moveBackward(speed) {
-    velocity.z = velocity.z + speed * 0.1
-end
+    velocity.z = velocity.z + speed * 0.1;
+}
 
 function moveLeft(speed) {
-    velocity.x = velocity.x - speed * 0.1
-end
+    velocity.x = velocity.x - speed * 0.1;
+}
 
 function moveRight(speed) {
-    velocity.x = velocity.x + speed * 0.1
-end
+    velocity.x = velocity.x + speed * 0.1;
+}
 
 function jump(power) {
-    if isGrounded then
-        velocity.y = power
-        isGrounded = false
-    end
+    if (isGrounded) {
+        velocity.y = power;
+        isGrounded = false;
+    }
 }
 
 function stopMovingForward() {
-    velocity.z = velocity.z * 0.5
+    velocity.z = velocity.z * 0.5;
 }
 
 function stopMovingLeft() {
-    velocity.x = velocity.x * 0.5
+    velocity.x = velocity.x * 0.5;
 }
 
--- Expose movement functions
-character.moveForward = moveForward
-character.moveBackward = moveBackward
-character.moveLeft = moveLeft
-character.moveRight = moveRight
-character.jump = jump
-character.stopMovingForward = stopMovingForward
-character.stopMovingLeft = stopMovingLeft
+// Expose movement functions
+character.moveForward = moveForward;
+character.moveBackward = moveBackward;
+character.moveLeft = moveLeft;
+character.moveRight = moveRight;
+character.jump = jump;
+character.stopMovingForward = stopMovingForward;
+character.stopMovingLeft = stopMovingLeft;
 
-game.onHeartbeat(updateMovement)`;
+game.onHeartbeat(updateMovement);`;
       case 'database':
         if (projectType === 'webapp') {
-          return `-- Application Database Schema
+          return `// Application Database Schema
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
@@ -583,7 +583,7 @@ function setUserData(userId, key, value) {
     VALUES (userId, key, value);
 }`;
         } else {
-          return `-- Player Database Schema
+          return `// Player Database Schema
 CREATE TABLE IF NOT EXISTS players (
     id INTEGER PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
@@ -596,7 +596,7 @@ CREATE TABLE IF NOT EXISTS players (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Game-specific tables
+// Game-specific tables
 CREATE TABLE IF NOT EXISTS game_stats (
     id INTEGER PRIMARY KEY,
     player_id INTEGER,
@@ -630,9 +630,9 @@ function updatePlayerHealth(playerId, health) {
 function addExperience(playerId, exp) {
     UPDATE players SET experience = experience + exp WHERE id = playerId;
     
-    -- Check for level up
-    inst currentExp = SELECT experience FROM players WHERE id = playerId;
-    inst newLevel = math.floor(currentExp / 100) + 1;
+    // Check for level up
+    const currentExp = SELECT experience FROM players WHERE id = playerId;
+    const newLevel = Math.floor(currentExp / 100) + 1;
     UPDATE players SET level = newLevel WHERE id = playerId;
 }`;
         }

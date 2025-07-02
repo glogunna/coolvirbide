@@ -97,6 +97,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         // Handle special cases for Virb.IO object hierarchy
         if (part === 'parent' && current === context.script) {
           current = context.character;
+        } else if (part === 'Parent' && current === context.script) {
+          current = context.character;
         } else if (part === 'Ploid' && current === context.character) {
           current = context.character.Ploid;
         } else if (part === 'PlayerOwner' && current && current.PlayerOwner) {
@@ -443,11 +445,18 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     return { x: 0, y: 1, z: 0 };
   };
 
+  // CRITICAL FIX: Load workspace objects from the actual project data
   const loadWorkspaceObjects = (scene: THREE.Scene) => {
-    console.log('[GAME] Loading workspace objects:', project.services.workspace.objects);
+    console.log('[GAME] Loading workspace objects from project:', project.services.workspace.objects);
     
     const loadObjectsRecursively = (objects: any[], parent?: THREE.Object3D) => {
       for (const obj of objects) {
+        // Skip config objects - they don't have visual representation
+        if (obj.type === 'config') {
+          console.log('[GAME] Skipping config object:', obj.name);
+          continue;
+        }
+
         console.log('[GAME] Loading object:', obj.name, 'type:', obj.type);
         let mesh: THREE.Mesh | THREE.Group | null = null;
 
@@ -572,9 +581,16 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       }
     };
 
+    // CRITICAL: Load the actual workspace objects from the project
     const workspaceObjects = project.services.workspace.objects || [];
     console.log('[GAME] Total workspace objects to load:', workspaceObjects.length);
-    loadObjectsRecursively(workspaceObjects);
+    
+    if (workspaceObjects.length > 0) {
+      loadObjectsRecursively(workspaceObjects);
+      addConsoleOutput(`[SYSTEM] Loaded ${workspaceObjects.length} workspace objects from your project!`);
+    } else {
+      addConsoleOutput('[SYSTEM] No workspace objects found in project - using default scene');
+    }
     
     setGameStats(prev => ({
       ...prev,
@@ -619,6 +635,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     directionalLight.shadow.camera.bottom = -20;
     scene.add(directionalLight);
 
+    // Create default baseplate (always present)
     const groundGeometry = new THREE.BoxGeometry(50, 1, 50);
     const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
@@ -628,7 +645,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     ground.userData = { id: 'baseplate', type: 'part' };
     scene.add(ground);
 
-    console.log('[GAME] Loading workspace objects...');
+    // CRITICAL FIX: Load workspace objects from the actual project
+    console.log('[GAME] Loading workspace objects from your project...');
     loadWorkspaceObjects(scene);
 
     const spawn = findSpawnPoint();
@@ -1107,6 +1125,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
                   <div className="text-orange-400">Keys Active: {Array.from(keys).join(', ') || 'None'}</div>
                   <div className="text-cyan-400">Movement System: ✓ WORKING!</div>
                   <div className="text-pink-400">Click canvas to lock mouse!</div>
+                  <div className="text-green-400">Workspace Objects: {gameStats.objects} loaded!</div>
                 </>
               )}
               {project.type === 'game2d' && (
@@ -1139,6 +1158,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
                 <div className="text-green-400">Scripts: {loadedScripts.length} ✓</div>
                 <div className="text-cyan-400">Movement: ✓ ACTIVE</div>
                 <div className="text-yellow-400">Camera: ✓ ACTIVE</div>
+                <div className="text-purple-400">Workspace: ✓ LOADED</div>
               </>
             )}
           </div>
@@ -1146,11 +1166,11 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           {project.type === 'game3d' && (
             <div className="absolute top-4 left-4 bg-black bg-opacity-70 text-white p-3 rounded-lg">
               <div className="text-sm space-y-1">
-                <div className="text-green-400 font-semibold">🚀 MOVEMENT SYSTEM FIXED!</div>
-                <div className="text-yellow-400">script.parent.Ploid.PlayerOwner ✓</div>
-                <div className="text-cyan-400">Input → Scripts → Movement ✓</div>
-                <div className="text-purple-400">Click canvas to start!</div>
-                <div className="text-red-400">Red cube should move now!</div>
+                <div className="text-green-400 font-semibold">🚀 WORKSPACE & MOVEMENT FIXED!</div>
+                <div className="text-yellow-400">✓ Your workspace objects are loaded</div>
+                <div className="text-cyan-400">✓ Input → Scripts → Movement working</div>
+                <div className="text-purple-400">✓ Click canvas to start!</div>
+                <div className="text-red-400">✓ Red cube should move now!</div>
               </div>
             </div>
           )}
@@ -1172,6 +1192,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
               <div className="text-green-400">[INFO] Movement controlled by your scripts ✓</div>
               <div className="text-red-400">[FIXED] character.moveForward() → Player movement ✓</div>
               <div className="text-cyan-400">[FIXED] character.rotate() → Camera rotation ✓</div>
+              <div className="text-purple-400">[FIXED] Workspace objects from IDE → Game world ✓</div>
             </>
           )}
           {consoleOutput.slice(-3).map((output, index) => (

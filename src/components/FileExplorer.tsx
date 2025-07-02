@@ -607,6 +607,15 @@ console.log("Configuration loaded");`;
     
     if (item.type) {
       onFileSelect(item);
+      
+      // CRITICAL: If this is a workspace object, notify the workspace editor
+      if (item.type === 'part' || item.type === 'sphere' || item.type === 'cylinder' || item.type === 'actor') {
+        console.log('[EXPLORER] Selecting workspace object:', item.id);
+        // Dispatch custom event to workspace editor
+        window.dispatchEvent(new CustomEvent('explorerObjectSelected', {
+          detail: { objectId: item.id }
+        }));
+      }
     }
   };
 
@@ -829,6 +838,7 @@ console.log("Configuration loaded");`;
           <div>• <span className="text-green-300">Actor</span> - Interactive game object</div>
           <div>• <span className="text-purple-300">Drag & Drop</span> - Reparent objects</div>
           <div>• <span className="text-cyan-300">✓ Workspace objects appear in game!</span></div>
+          <div>• <span className="text-yellow-300">✓ Explorer selection highlights objects!</span></div>
         </div>
       </div>
 

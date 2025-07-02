@@ -413,7 +413,6 @@ inputService.onKeyUp(onKeyUp);`;
         return `// Camera Controller (Home Script)
 // WARNING: Modifying this script may cause camera issues!
 
-camera = inst('Workspace.Camera');
 const mouse = player.Mouse;
 
 let cameraType = "ThirdPerson"; // "ThirdPerson", "FirstPerson", "TopDown"

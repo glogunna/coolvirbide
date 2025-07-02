@@ -39,6 +39,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   const [scriptContext, setScriptContext] = useState<ScriptContext | null>(null);
   const [loadedScripts, setLoadedScripts] = useState<any[]>([]);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
+  const [hasCharacter, setHasCharacter] = useState(false);
+  const [characterData, setCharacterData] = useState<any>(null);
 
   // CRITICAL: Movement state that scripts can modify - using refs for immediate updates
   const movementStateRef = useRef({
@@ -54,6 +56,51 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   // CRITICAL: Use refs for immediate velocity and camera updates
   const playerVelocityRef = useRef({ x: 0, y: 0, z: 0 });
   const cameraAngleRef = useRef({ horizontal: 0, vertical: 0 });
+
+  // CRITICAL: Check if Character1 folder exists and has a Ploid
+  const checkForCharacter = () => {
+    console.log('[CHARACTER] Checking for Character1 folder in PrivateStorage...');
+    
+    if (!project.services.serverStorage.character || project.services.serverStorage.character.length === 0) {
+      console.log('[CHARACTER] No character folders found in PrivateStorage');
+      addConsoleOutput('[ERROR] No Character folder found in PrivateStorage - cannot spawn player!');
+      setHasCharacter(false);
+      setCharacterData(null);
+      return false;
+    }
+
+    // Find Character1 folder
+    const character1 = project.services.serverStorage.character.find((char: any) => 
+      char.name === 'Character1' || char.type === 'folder'
+    );
+
+    if (!character1) {
+      console.log('[CHARACTER] Character1 folder not found');
+      addConsoleOutput('[ERROR] Character1 folder not found in PrivateStorage - cannot spawn player!');
+      setHasCharacter(false);
+      setCharacterData(null);
+      return false;
+    }
+
+    console.log('[CHARACTER] Found Character1 folder:', character1);
+
+    // Check if Character1 has a Ploid
+    const ploid = character1.children?.find((child: any) => child.type === 'ploid');
+    if (!ploid) {
+      console.log('[CHARACTER] No Ploid found in Character1 folder');
+      addConsoleOutput('[ERROR] No Ploid found in Character1 folder - cannot spawn player!');
+      setHasCharacter(false);
+      setCharacterData(null);
+      return false;
+    }
+
+    console.log('[CHARACTER] Found Ploid in Character1:', ploid);
+    addConsoleOutput('[SUCCESS] Character1 folder with Ploid found - player can spawn!');
+    
+    setHasCharacter(true);
+    setCharacterData(character1);
+    return true;
+  };
 
   // Script execution system
   const executeScript = (scriptContent: string, context: ScriptContext) => {
@@ -126,6 +173,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   };
 
   const findPlayerScripts = () => {
+    // CRITICAL: Only find scripts if we have a character
+    if (!hasCharacter || !characterData) {
+      addConsoleOutput('[ERROR] No character found - cannot load player scripts!');
+      return [];
+    }
+
     const scripts: any[] = [];
 
     const findScriptsRecursively = (objects: any[], parentPath = '') => {
@@ -147,9 +200,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       }
     };
 
-    if (project.services.serverStorage.character) {
-      findScriptsRecursively(project.services.serverStorage.character, 'PrivateStorage/Character');
+    // CRITICAL: Only search in Character1 folder
+    if (characterData.children) {
+      findScriptsRecursively(characterData.children, 'PrivateStorage/Character1');
     }
+
+    // Also search shared scripts
     if (project.services.replicatedStorage.scripts) {
       findScriptsRecursively(project.services.replicatedStorage.scripts, 'SharedStorage/Scripts');
     }
@@ -157,9 +213,32 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     return scripts;
   };
 
-  const createScriptContext = (): ScriptContext => {
-    // Create the ploid config object
-    const ploidConfig = {
+  const createScriptContext = (): ScriptContext | null => {
+    // CRITICAL: Only create script context if we have a character
+    if (!hasCharacter || !characterData) {
+      addConsoleOutput('[ERROR] Cannot create script context - no character found!');
+      return null;
+    }
+
+    // Find the Ploid in Character1
+    const ploid = characterData.children?.find((child: any) => child.type === 'ploid');
+    if (!ploid) {
+      addConsoleOutput('[ERROR] Cannot create script context - no Ploid found in Character1!');
+      return null;
+    }
+
+    // Get Ploid config
+    const ploidConfig = ploid.children?.find((child: any) => child.type === 'config');
+    const configData = ploidConfig ? {
+      WalkSpeed: 16,
+      RunSpeed: 24,
+      JumpPower: 50,
+      MaxHealth: 100,
+      Health: 100,
+      Mass: 1,
+      Friction: 0.8,
+      Elasticity: 0.2
+    } : {
       WalkSpeed: 16,
       RunSpeed: 24,
       JumpPower: 50,
@@ -171,19 +250,19 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     };
 
     // Create the ploid object
-    const ploid = {
+    const ploidObject = {
       PlayerOwner: null,
-      Config: ploidConfig,
-      MaxHealth: 100,
-      Health: 100,
-      WalkSpeed: 16,
-      RunSpeed: 24,
-      JumpPower: 50
+      Config: configData,
+      MaxHealth: configData.MaxHealth,
+      Health: configData.Health,
+      WalkSpeed: configData.WalkSpeed,
+      RunSpeed: configData.RunSpeed,
+      JumpPower: configData.JumpPower
     };
 
     // CRITICAL FIX: Create character object with ACTUAL movement functions that directly modify refs
     const character = {
-      Ploid: ploid,
+      Ploid: ploidObject,
       position: playerPosition,
       rotation: { x: 0, y: 0, z: 0 },
       moveForward: (speed: number) => {
@@ -340,7 +419,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       }
     };
 
-    ploid.PlayerOwner = player;
+    ploidObject.PlayerOwner = player;
 
     const context: ScriptContext = {
       script: {
@@ -411,7 +490,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
   const loadAndExecutePlayerScripts = (context: ScriptContext) => {
     const playerScripts = findPlayerScripts();
-    addConsoleOutput(`[SYSTEM] Found ${playerScripts.length} player scripts`);
+    addConsoleOutput(`[SYSTEM] Found ${playerScripts.length} player scripts in Character1`);
 
     for (const script of playerScripts) {
       if (script.content) {
@@ -426,8 +505,11 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   useEffect(() => {
     if (!mountRef.current) return;
 
+    // CRITICAL: Check for character first
+    const hasChar = checkForCharacter();
+
     if (project.type === 'game3d') {
-      const cleanup = init3DGame();
+      const cleanup = init3DGame(hasChar);
       return cleanup;
     } else if (project.type === 'game2d') {
       render2DGame();
@@ -628,7 +710,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     }));
   };
 
-  const init3DGame = () => {
+  const init3DGame = (hasCharacterModel: boolean) => {
     if (!mountRef.current) return;
 
     mountRef.current.innerHTML = '';
@@ -683,25 +765,40 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     setSpawnPoint(spawn);
     setPlayerPosition(spawn);
 
-    const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
-    const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 });
-    const player = new THREE.Mesh(playerGeometry, playerMaterial);
-    player.position.set(spawn.x, spawn.y, spawn.z);
-    player.castShadow = true;
-    player.name = 'Player';
-    player.userData = { id: 'player', type: 'player' };
-    scene.add(player);
-    playerRef.current = player;
+    // CRITICAL: Only create player if we have a character model
+    if (hasCharacterModel) {
+      const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
+      const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 });
+      const player = new THREE.Mesh(playerGeometry, playerMaterial);
+      player.position.set(spawn.x, spawn.y, spawn.z);
+      player.castShadow = true;
+      player.name = 'Player';
+      player.userData = { id: 'player', type: 'player' };
+      scene.add(player);
+      playerRef.current = player;
 
-    console.log('[GAME] Player spawned at:', spawn);
+      console.log('[GAME] Player spawned at:', spawn);
+      addConsoleOutput(`[PLAYER] Player spawned using Character1 model at (${spawn.x}, ${spawn.y}, ${spawn.z})`);
+    } else {
+      addConsoleOutput('[ERROR] No player spawned - Character1 folder with Ploid not found!');
+      addConsoleOutput('[INFO] Add a Character folder with a Ploid to PrivateStorage to enable player spawning');
+    }
 
     const gridHelper = new THREE.GridHelper(50, 50);
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    const context = createScriptContext();
-    setScriptContext(context);
-    loadAndExecutePlayerScripts(context);
+    // CRITICAL: Only create script context and load scripts if we have a character
+    if (hasCharacterModel) {
+      const context = createScriptContext();
+      if (context) {
+        setScriptContext(context);
+        loadAndExecutePlayerScripts(context);
+      }
+    } else {
+      addConsoleOutput('[ERROR] Cannot load player scripts - no Character1 folder found!');
+      setLoadedScripts([]);
+    }
 
     let isMouseDown = false;
     let mouseX = 0;
@@ -720,27 +817,30 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         const deltaX = event.movementX || 0;
         const deltaY = event.movementY || 0;
 
-        if (context.player.Mouse._mouseMoveCallback) {
-          addConsoleOutput(`[MOUSE] Calling script mouse callback: ${deltaX}, ${deltaY}`);
-          context.player.Mouse._mouseMoveCallback(deltaX * 0.002, deltaY * 0.002);
-        } else if (context.character.rotate) {
-          addConsoleOutput(`[MOUSE] Calling character.rotate: ${deltaX}, ${deltaY}`);
-          context.character.rotate(deltaX * 0.002, deltaY * 0.002);
-        } else {
-          addConsoleOutput(`[MOUSE] Direct camera rotation: ${deltaX}, ${deltaY}`);
-          cameraAngleRef.current.horizontal += deltaX * 0.002;
-          cameraAngleRef.current.vertical = Math.max(-Math.PI/3, Math.min(Math.PI/3, cameraAngleRef.current.vertical + deltaY * 0.002));
-          setCameraAngle(prev => ({
-            horizontal: prev.horizontal + deltaX * 0.002,
-            vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical + deltaY * 0.002))
-          }));
+        // CRITICAL: Only handle mouse movement if we have a character and scripts
+        if (hasCharacterModel && scriptContext) {
+          if (scriptContext.player.Mouse._mouseMoveCallback) {
+            addConsoleOutput(`[MOUSE] Calling script mouse callback: ${deltaX}, ${deltaY}`);
+            scriptContext.player.Mouse._mouseMoveCallback(deltaX * 0.002, deltaY * 0.002);
+          } else if (scriptContext.character.rotate) {
+            addConsoleOutput(`[MOUSE] Calling character.rotate: ${deltaX}, ${deltaY}`);
+            scriptContext.character.rotate(deltaX * 0.002, deltaY * 0.002);
+          } else {
+            addConsoleOutput(`[MOUSE] Direct camera rotation: ${deltaX}, ${deltaY}`);
+            cameraAngleRef.current.horizontal += deltaX * 0.002;
+            cameraAngleRef.current.vertical = Math.max(-Math.PI/3, Math.min(Math.PI/3, cameraAngleRef.current.vertical + deltaY * 0.002));
+            setCameraAngle(prev => ({
+              horizontal: prev.horizontal + deltaX * 0.002,
+              vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical + deltaY * 0.002))
+            }));
+          }
         }
       } else if (isMouseDown) {
         const deltaX = event.clientX - mouseX;
         const deltaY = event.clientY - mouseY;
 
-        if (context.character.rotate) {
-          context.character.rotate(deltaX * 0.005, deltaY * 0.005);
+        if (hasCharacterModel && scriptContext && scriptContext.character.rotate) {
+          scriptContext.character.rotate(deltaX * 0.005, deltaY * 0.005);
         }
 
         mouseX = event.clientX;
@@ -764,13 +864,18 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           
           addConsoleOutput(`[INPUT] Processing key down: ${key}`);
           
-          if (context.inputService._keyDownCallback) {
-            addConsoleOutput(`[INPUT] Calling inputService._keyDownCallback for: ${key}`);
-            context.inputService._keyDownCallback(key);
-          }
-          if (context.player.input._keyDownCallback) {
-            addConsoleOutput(`[INPUT] Calling player.input._keyDownCallback for: ${key}`);
-            context.player.input._keyDownCallback(key);
+          // CRITICAL: Only handle input if we have a character and scripts
+          if (hasCharacterModel && scriptContext) {
+            if (scriptContext.inputService._keyDownCallback) {
+              addConsoleOutput(`[INPUT] Calling inputService._keyDownCallback for: ${key}`);
+              scriptContext.inputService._keyDownCallback(key);
+            }
+            if (scriptContext.player.input._keyDownCallback) {
+              addConsoleOutput(`[INPUT] Calling player.input._keyDownCallback for: ${key}`);
+              scriptContext.player.input._keyDownCallback(key);
+            }
+          } else {
+            addConsoleOutput(`[INPUT] No character scripts available - input ignored`);
           }
         }
         
@@ -790,13 +895,18 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           
           addConsoleOutput(`[INPUT] Processing key up: ${key}`);
           
-          if (context.inputService._keyUpCallback) {
-            addConsoleOutput(`[INPUT] Calling inputService._keyUpCallback for: ${key}`);
-            context.inputService._keyUpCallback(key);
-          }
-          if (context.player.input._keyUpCallback) {
-            addConsoleOutput(`[INPUT] Calling player.input._keyUpCallback for: ${key}`);
-            context.player.input._keyUpCallback(key);
+          // CRITICAL: Only handle input if we have a character and scripts
+          if (hasCharacterModel && scriptContext) {
+            if (scriptContext.inputService._keyUpCallback) {
+              addConsoleOutput(`[INPUT] Calling inputService._keyUpCallback for: ${key}`);
+              scriptContext.inputService._keyUpCallback(key);
+            }
+            if (scriptContext.player.input._keyUpCallback) {
+              addConsoleOutput(`[INPUT] Calling player.input._keyUpCallback for: ${key}`);
+              scriptContext.player.input._keyUpCallback(key);
+            }
+          } else {
+            addConsoleOutput(`[INPUT] No character scripts available - input ignored`);
           }
         }
         
@@ -827,23 +937,35 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       const deltaTime = (currentTime - lastTime) / 1000;
       lastTime = currentTime;
       
-      if (context.game._heartbeatCallback) {
-        context.game._heartbeatCallback(deltaTime);
+      // CRITICAL: Only run game loop callbacks if we have a character
+      if (hasCharacterModel && scriptContext && scriptContext.game._heartbeatCallback) {
+        scriptContext.game._heartbeatCallback(deltaTime);
       }
       
-      updatePlayer(deltaTime);
-      updateCamera();
+      // CRITICAL: Only update player if we have one
+      if (hasCharacterModel) {
+        updatePlayer(deltaTime);
+        updateCamera();
+      }
+      
       renderer.render(scene, camera);
       requestAnimationFrame(gameLoop);
     };
     gameLoop(0);
 
     console.log('[GAME] 3D Game initialized with script execution system');
-    addConsoleOutput('[SYSTEM] 3D Game initialized with script execution system');
-    addConsoleOutput('[SYSTEM] Player scripts loaded and ready');
-    addConsoleOutput('[SYSTEM] Virb.IO object hierarchy: script.parent.Ploid.PlayerOwner');
-    addConsoleOutput('[SYSTEM] Movement system: Scripts → character.moveForward() → Player movement');
-    addConsoleOutput('[SYSTEM] Camera system: Scripts → character.rotate() → Camera rotation');
+    addConsoleOutput('[SYSTEM] 3D Game initialized');
+    
+    if (hasCharacterModel) {
+      addConsoleOutput('[SYSTEM] Character1 folder found - player scripts loaded and ready');
+      addConsoleOutput('[SYSTEM] Virb.IO object hierarchy: script.parent.Ploid.PlayerOwner');
+      addConsoleOutput('[SYSTEM] Movement system: Scripts → character.moveForward() → Player movement');
+      addConsoleOutput('[SYSTEM] Camera system: Scripts → character.rotate() → Camera rotation');
+    } else {
+      addConsoleOutput('[ERROR] No Character1 folder found in PrivateStorage');
+      addConsoleOutput('[INFO] Create a Character folder with a Ploid to enable player spawning');
+      addConsoleOutput('[INFO] Player scripts will not load without a character model');
+    }
 
     return () => {
       console.log('[GAME] Cleaning up 3D game...');
@@ -870,7 +992,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
   // CRITICAL FIX: Use refs for immediate velocity updates in the physics loop
   const updatePlayer = (deltaTime: number) => {
-    if (!playerRef.current) return;
+    if (!playerRef.current || !hasCharacter) return;
 
     const gravity = -30;
 
@@ -915,7 +1037,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
   // CRITICAL FIX: Use refs for immediate camera updates
   const updateCamera = () => {
-    if (!cameraRef.current || !playerRef.current) return;
+    if (!cameraRef.current || !playerRef.current || !hasCharacter) return;
 
     const camera = cameraRef.current;
     const player = playerRef.current;
@@ -1101,7 +1223,10 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     }
 
     setConsoleOutput([]);
-    if (scriptContext) {
+    
+    // Re-check for character and reload scripts
+    const hasChar = checkForCharacter();
+    if (hasChar && scriptContext) {
       loadAndExecutePlayerScripts(scriptContext);
     }
   };
@@ -1126,9 +1251,14 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             <span>Scripts: {loadedScripts.length}</span>
             <span>Memory: {gameStats.memory}</span>
             {project.type === 'game3d' && (
-              <span className={`${isMouseLocked ? 'text-green-400' : 'text-yellow-400'}`}>
-                Mouse: {isMouseLocked ? 'Locked' : 'Free'}
-              </span>
+              <>
+                <span className={`${hasCharacter ? 'text-green-400' : 'text-red-400'}`}>
+                  Character: {hasCharacter ? 'Found' : 'Missing'}
+                </span>
+                <span className={`${isMouseLocked ? 'text-green-400' : 'text-yellow-400'}`}>
+                  Mouse: {isMouseLocked ? 'Locked' : 'Free'}
+                </span>
+              </>
             )}
           </div>
           <button
@@ -1166,16 +1296,27 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             <div className="text-sm space-y-1">
               {project.type === 'game3d' && (
                 <>
-                  <div className="text-green-400 font-semibold">🎮 MOVEMENT & CAMERA FIXED!</div>
-                  <div className="text-yellow-400">✓ WASD: Real movement working!</div>
-                  <div className="text-cyan-400">✓ Mouse: Real camera rotation!</div>
-                  <div className="text-purple-400">✓ Space: Jump working!</div>
-                  <div className="text-red-400">✓ Red cube moves & rotates!</div>
-                  <div className="text-green-400">Scripts: {loadedScripts.length} ✓</div>
-                  <div className="text-orange-400">Keys: {Array.from(keys).join(', ') || 'None'}</div>
-                  <div className="text-cyan-400">Velocity: ({playerVelocity.x.toFixed(2)}, {playerVelocity.y.toFixed(2)}, {playerVelocity.z.toFixed(2)})</div>
-                  <div className="text-pink-400">Click canvas to lock mouse!</div>
-                  <div className="text-green-400">Workspace: {gameStats.objects} objects!</div>
+                  {hasCharacter ? (
+                    <>
+                      <div className="text-green-400 font-semibold">🎮 CHARACTER SYSTEM WORKING!</div>
+                      <div className="text-yellow-400">✓ Character1 folder found</div>
+                      <div className="text-cyan-400">✓ Ploid found in Character1</div>
+                      <div className="text-purple-400">✓ Player scripts loaded</div>
+                      <div className="text-red-400">✓ Red cube player spawned</div>
+                      <div className="text-green-400">✓ WASD movement working</div>
+                      <div className="text-orange-400">Keys: {Array.from(keys).join(', ') || 'None'}</div>
+                      <div className="text-pink-400">Click canvas to lock mouse!</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-red-400 font-semibold">❌ NO CHARACTER FOUND!</div>
+                      <div className="text-yellow-400">Missing: Character1 folder</div>
+                      <div className="text-cyan-400">Missing: Ploid in Character1</div>
+                      <div className="text-purple-400">No player scripts loaded</div>
+                      <div className="text-orange-400">No player spawned</div>
+                      <div className="text-pink-400">Add Character1 to PrivateStorage!</div>
+                    </>
+                  )}
                 </>
               )}
               {project.type === 'game2d' && (
@@ -1201,15 +1342,28 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             <div>Objects: {gameStats.objects}</div>
             {project.type === 'game3d' && (
               <>
-                <div>Player: ({playerPosition.x.toFixed(1)}, {playerPosition.y.toFixed(1)}, {playerPosition.z.toFixed(1)})</div>
-                <div>Velocity: ({playerVelocity.x.toFixed(2)}, {playerVelocity.y.toFixed(2)}, {playerVelocity.z.toFixed(2)})</div>
-                <div>Camera: ({cameraAngle.horizontal.toFixed(2)}, {cameraAngle.vertical.toFixed(2)})</div>
-                <div>Grounded: {isGrounded ? 'Yes' : 'No'}</div>
-                <div>Keys: {keys.size}</div>
-                <div className="text-green-400">Scripts: {loadedScripts.length} ✓</div>
-                <div className="text-cyan-400">Movement: ✓ WORKING!</div>
-                <div className="text-yellow-400">Camera: ✓ WORKING!</div>
-                <div className="text-purple-400">Workspace: ✓ LOADED</div>
+                <div className={hasCharacter ? 'text-green-400' : 'text-red-400'}>
+                  Character: {hasCharacter ? 'Found' : 'Missing'}
+                </div>
+                {hasCharacter && (
+                  <>
+                    <div>Player: ({playerPosition.x.toFixed(1)}, {playerPosition.y.toFixed(1)}, {playerPosition.z.toFixed(1)})</div>
+                    <div>Velocity: ({playerVelocity.x.toFixed(2)}, {playerVelocity.y.toFixed(2)}, {playerVelocity.z.toFixed(2)})</div>
+                    <div>Camera: ({cameraAngle.horizontal.toFixed(2)}, {cameraAngle.vertical.toFixed(2)})</div>
+                    <div>Grounded: {isGrounded ? 'Yes' : 'No'}</div>
+                    <div>Keys: {keys.size}</div>
+                    <div className="text-green-400">Scripts: {loadedScripts.length} ✓</div>
+                    <div className="text-cyan-400">Movement: ✓ WORKING!</div>
+                    <div className="text-yellow-400">Camera: ✓ WORKING!</div>
+                  </>
+                )}
+                {!hasCharacter && (
+                  <>
+                    <div className="text-red-400">No Player Spawned</div>
+                    <div className="text-red-400">No Scripts Loaded</div>
+                    <div className="text-red-400">Add Character1!</div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -1217,12 +1371,25 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           {project.type === 'game3d' && (
             <div className="absolute top-4 left-4 bg-black bg-opacity-70 text-white p-3 rounded-lg">
               <div className="text-sm space-y-1">
-                <div className="text-green-400 font-semibold">🚀 FULLY WORKING NOW!</div>
-                <div className="text-yellow-400">✓ Scripts control movement</div>
-                <div className="text-cyan-400">✓ Mouse controls camera</div>
-                <div className="text-purple-400">✓ Workspace objects loaded</div>
-                <div className="text-red-400">✓ Player moves & camera rotates!</div>
-                <div className="text-green-400">✓ Click canvas & use WASD!</div>
+                {hasCharacter ? (
+                  <>
+                    <div className="text-green-400 font-semibold">🚀 CHARACTER DEPENDENCY FIXED!</div>
+                    <div className="text-yellow-400">✓ Character1 folder required</div>
+                    <div className="text-cyan-400">✓ Ploid required in Character1</div>
+                    <div className="text-purple-400">✓ Scripts loaded from Character1</div>
+                    <div className="text-red-400">✓ Player spawned with character</div>
+                    <div className="text-green-400">✓ Movement system working!</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-red-400 font-semibold">❌ CHARACTER DEPENDENCY WORKING!</div>
+                    <div className="text-yellow-400">No Character1 folder found</div>
+                    <div className="text-cyan-400">No Ploid found</div>
+                    <div className="text-purple-400">No player scripts loaded</div>
+                    <div className="text-orange-400">No player spawned</div>
+                    <div className="text-pink-400">Add Character1 to PrivateStorage!</div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -1231,21 +1398,32 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
       <div className="bg-gray-800 border-t border-gray-700 p-4 h-32 overflow-auto">
         <div className="text-sm font-mono text-gray-300 space-y-1">
-          <div className="text-green-400">[INFO] Game initialized with Virb.IO script execution system</div>
+          <div className="text-green-400">[INFO] Game initialized with character dependency system</div>
           <div className="text-blue-400">[DEBUG] Loading {project.type} environment...</div>
           <div className="text-green-400">[INFO] Workspace objects loaded from project ✓</div>
           {project.type === 'game3d' && (
             <>
               <div className="text-blue-400">[DEBUG] 3D scene created with THREE.js</div>
-              <div className="text-green-400">[INFO] Player spawned at Actor spawn point ({spawnPoint.x}, {spawnPoint.y}, {spawnPoint.z})</div>
-              <div className="text-purple-400">[SYSTEM] Virb.IO object hierarchy initialized</div>
-              <div className="text-cyan-400">[SYSTEM] script.parent.Ploid.PlayerOwner → Player object</div>
-              <div className="text-yellow-400">[INFO] Input system connected to scripts</div>
-              <div className="text-green-400">[FIXED] Movement controlled by scripts ✓</div>
-              <div className="text-red-400">[FIXED] character.moveForward() → REAL movement ✓</div>
-              <div className="text-cyan-400">[FIXED] character.rotate() → REAL camera rotation ✓</div>
-              <div className="text-purple-400">[FIXED] Workspace objects from IDE → Game world ✓</div>
-              <div className="text-green-400">[FIXED] Using refs for immediate velocity/camera updates ✓</div>
+              {hasCharacter ? (
+                <>
+                  <div className="text-green-400">[SUCCESS] Character1 folder found in PrivateStorage ✓</div>
+                  <div className="text-green-400">[SUCCESS] Ploid found in Character1 ✓</div>
+                  <div className="text-green-400">[INFO] Player spawned at Actor spawn point ({spawnPoint.x}, {spawnPoint.y}, {spawnPoint.z})</div>
+                  <div className="text-purple-400">[SYSTEM] Virb.IO object hierarchy initialized</div>
+                  <div className="text-cyan-400">[SYSTEM] script.parent.Ploid.PlayerOwner → Player object</div>
+                  <div className="text-yellow-400">[INFO] Input system connected to scripts</div>
+                  <div className="text-green-400">[FIXED] Movement controlled by Character1 scripts ✓</div>
+                  <div className="text-red-400">[FIXED] character.moveForward() → REAL movement ✓</div>
+                  <div className="text-cyan-400">[FIXED] character.rotate() → REAL camera rotation ✓</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-red-400">[ERROR] No Character1 folder found in PrivateStorage ✗</div>
+                  <div className="text-red-400">[ERROR] No Ploid found - cannot spawn player ✗</div>
+                  <div className="text-yellow-400">[INFO] Create Character1 folder with Ploid to enable player</div>
+                  <div className="text-yellow-400">[INFO] Player scripts will not load without character</div>
+                </>
+              )}
             </>
           )}
           {consoleOutput.slice(-3).map((output, index) => (

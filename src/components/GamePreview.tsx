@@ -54,16 +54,19 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   // Script execution system
   const executeScript = (scriptContent: string, context: ScriptContext) => {
     try {
-      // Create a safe execution environment
+      // Create a safe execution environment with inst function
+      const instFunction = (path: string) => getObjectByPath(path, context);
+      
+      // Create the script function with proper context
       const scriptFunction = new Function(
-        'inst', 'print', 'game', 'script', 'player', 'character', 'camera', 'inputService', 'workspace', 'math', 'wait',
+        'inst', 'console', 'game', 'script', 'player', 'character', 'camera', 'inputService', 'workspace', 'Math', 'wait',
         scriptContent
       );
 
       // Execute the script with the provided context
       scriptFunction(
-        (path: string) => getObjectByPath(path, context), // inst function
-        context.print,
+        instFunction,
+        { log: context.print },
         context.game,
         context.script,
         context.player,
@@ -71,8 +74,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         context.camera,
         context.inputService,
         context.workspace,
-        Math, // math object
-        (seconds: number) => new Promise(resolve => setTimeout(resolve, seconds * 1000)) // wait function
+        Math,
+        (seconds: number) => new Promise(resolve => setTimeout(resolve, seconds * 1000))
       );
 
       addConsoleOutput(`[SCRIPT] Script executed successfully`);
@@ -93,10 +96,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       } else {
         // Handle special cases for Virb.IO object hierarchy
         if (part === 'parent' && current === context.script) {
-          // script.parent should return the character folder
           current = context.character;
         } else if (part === 'Ploid' && current === context.character) {
-          // character.Ploid should return the ploid object
           current = context.character.Ploid;
         } else if (part === 'PlayerOwner' && current && current.PlayerOwner) {
           current = current.PlayerOwner;
@@ -115,21 +116,19 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   };
 
   const addConsoleOutput = (message: string) => {
-    setConsoleOutput(prev => [...prev.slice(-20), message]); // Keep last 20 messages
+    setConsoleOutput(prev => [...prev.slice(-20), message]);
   };
 
   const findPlayerScripts = () => {
-    // Find all player-related scripts in the project
     const scripts: any[] = [];
 
     const findScriptsRecursively = (objects: any[], parentPath = '') => {
       for (const obj of objects) {
         if (obj.type === 'vlscript' || obj.type === 'vscript') {
-          // Check if this is a player-related script
           if (obj.name.toLowerCase().includes('input') || 
               obj.name.toLowerCase().includes('movement') || 
               obj.name.toLowerCase().includes('camera') ||
-              obj.warning) { // Scripts with warnings are usually core player scripts
+              obj.warning) {
             scripts.push({
               ...obj,
               path: parentPath + '/' + obj.name
@@ -142,7 +141,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       }
     };
 
-    // Search in all storage locations
     if (project.services.serverStorage.character) {
       findScriptsRecursively(project.services.serverStorage.character, 'PrivateStorage/Character');
     }
@@ -168,7 +166,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
     // Create the ploid object
     const ploid = {
-      PlayerOwner: null, // Will be set to player
+      PlayerOwner: null,
       Config: ploidConfig,
       MaxHealth: 100,
       Health: 100,
@@ -189,8 +187,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         
         // CRITICAL: Apply immediate forward movement based on camera angle
         const angle = cameraAngle.horizontal;
-        const moveX = Math.sin(angle) * speed * 0.05;
-        const moveZ = Math.cos(angle) * speed * 0.05;
+        const moveX = Math.sin(angle) * speed * 0.02;
+        const moveZ = Math.cos(angle) * speed * 0.02;
         
         setPlayerVelocity(prev => ({ 
           ...prev, 
@@ -203,10 +201,9 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         movementStateRef.current.moveBackward = true;
         movementStateRef.current.walkSpeed = speed;
         
-        // CRITICAL: Apply immediate backward movement based on camera angle
         const angle = cameraAngle.horizontal;
-        const moveX = Math.sin(angle) * speed * 0.05;
-        const moveZ = Math.cos(angle) * speed * 0.05;
+        const moveX = Math.sin(angle) * speed * 0.02;
+        const moveZ = Math.cos(angle) * speed * 0.02;
         
         setPlayerVelocity(prev => ({ 
           ...prev, 
@@ -219,10 +216,9 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         movementStateRef.current.moveLeft = true;
         movementStateRef.current.walkSpeed = speed;
         
-        // CRITICAL: Apply immediate left movement based on camera angle
         const angle = cameraAngle.horizontal - Math.PI / 2;
-        const moveX = Math.sin(angle) * speed * 0.05;
-        const moveZ = Math.cos(angle) * speed * 0.05;
+        const moveX = Math.sin(angle) * speed * 0.02;
+        const moveZ = Math.cos(angle) * speed * 0.02;
         
         setPlayerVelocity(prev => ({ 
           ...prev, 
@@ -235,10 +231,9 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         movementStateRef.current.moveRight = true;
         movementStateRef.current.walkSpeed = speed;
         
-        // CRITICAL: Apply immediate right movement based on camera angle
         const angle = cameraAngle.horizontal + Math.PI / 2;
-        const moveX = Math.sin(angle) * speed * 0.05;
-        const moveZ = Math.cos(angle) * speed * 0.05;
+        const moveX = Math.sin(angle) * speed * 0.02;
+        const moveZ = Math.cos(angle) * speed * 0.02;
         
         setPlayerVelocity(prev => ({ 
           ...prev, 
@@ -252,8 +247,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           movementStateRef.current.jump = true;
           movementStateRef.current.jumpPower = power;
           
-          // CRITICAL: Apply immediate jump velocity
-          setPlayerVelocity(prev => ({ ...prev, y: power * 0.03 }));
+          setPlayerVelocity(prev => ({ ...prev, y: power * 0.02 }));
           setIsGrounded(false);
         } else {
           addConsoleOutput(`[CHARACTER] jump(${power}) called - ALREADY IN AIR!`);
@@ -262,22 +256,21 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       stopMovingForward: () => {
         addConsoleOutput('[CHARACTER] stopMovingForward() called');
         movementStateRef.current.moveForward = false;
-        // Apply friction to forward/backward movement
+        movementStateRef.current.moveBackward = false;
         setPlayerVelocity(prev => ({ 
           ...prev, 
-          x: prev.x * 0.7,
-          z: prev.z * 0.7
+          x: prev.x * 0.5,
+          z: prev.z * 0.5
         }));
       },
       stopMovingLeft: () => {
         addConsoleOutput('[CHARACTER] stopMovingLeft() called');
         movementStateRef.current.moveLeft = false;
         movementStateRef.current.moveRight = false;
-        // Apply friction to left/right movement
         setPlayerVelocity(prev => ({ 
           ...prev, 
-          x: prev.x * 0.7,
-          z: prev.z * 0.7
+          x: prev.x * 0.5,
+          z: prev.z * 0.5
         }));
       },
       rotate: (deltaX: number, deltaY: number) => {
@@ -314,13 +307,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       }
     };
 
-    // Set up the ploid's PlayerOwner reference
     ploid.PlayerOwner = player;
 
     const context: ScriptContext = {
       script: {
-        parent: character, // script.parent points to the character
-        Parent: character  // Also support uppercase
+        parent: character,
+        Parent: character
       },
       player: player,
       character: character,
@@ -360,7 +352,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         Players: {
           LocalPlayer: player
         },
-        InputService: null, // Will be set to context.inputService
+        InputService: null,
         onHeartbeat: (callback: (deltaTime: number) => void) => {
           addConsoleOutput('[GAME] onHeartbeat() handler registered');
           context.game._heartbeatCallback = callback;
@@ -371,7 +363,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         _heartbeatCallback: null
       },
       workspace: {
-        Camera: null, // Will be set to context.camera
+        Camera: null,
         Player: player
       },
       print: (message: string) => {
@@ -379,7 +371,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       }
     };
 
-    // Set up cross-references
     context.game.InputService = context.inputService;
     context.workspace.Camera = context.camera;
 
@@ -403,7 +394,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   useEffect(() => {
     if (!mountRef.current) return;
 
-    // Initialize based on project type
     if (project.type === 'game3d') {
       const cleanup = init3DGame();
       return cleanup;
@@ -413,7 +403,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       renderWebApp();
     }
 
-    // Update stats
     setGameStats({
       fps: 60,
       objects: project.type.includes('game') ? 5 : 0,
@@ -422,12 +411,10 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   }, [project]);
 
   const findSpawnPoint = () => {
-    // Look for Actor objects with SpawnPoint role in the workspace
     const findActorsRecursively = (objects: any[]): any[] => {
       let actors: any[] = [];
       for (const obj of objects) {
         if (obj.type === 'actor') {
-          // Check if this actor has a config that defines it as a spawn point
           const config = obj.children?.find((child: any) => child.type === 'config');
           if (config && config.content && config.content.includes('Role = "SpawnPoint"')) {
             actors.push(obj);
@@ -444,7 +431,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     const spawnActors = findActorsRecursively(workspaceObjects);
     
     if (spawnActors.length > 0) {
-      // Find default spawn point or use the first one
       const defaultSpawn = spawnActors.find(actor => {
         const config = actor.children?.find((child: any) => child.type === 'config');
         return config && config.content && config.content.includes('IsDefault = true');
@@ -454,13 +440,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       return chosenSpawn.position || { x: 0, y: 1, z: 0 };
     }
     
-    return { x: 0, y: 1, z: 0 }; // Default spawn if no spawn point found
+    return { x: 0, y: 1, z: 0 };
   };
 
   const loadWorkspaceObjects = (scene: THREE.Scene) => {
     console.log('[GAME] Loading workspace objects:', project.services.workspace.objects);
     
-    // Load objects from the actual workspace
     const loadObjectsRecursively = (objects: any[], parent?: THREE.Object3D) => {
       for (const obj of objects) {
         console.log('[GAME] Loading object:', obj.name, 'type:', obj.type);
@@ -512,12 +497,10 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             break;
 
           case 'actor':
-            // Create visual representation for Actor (spawn point)
             const config = obj.children?.find((child: any) => child.type === 'config');
             const isSpawnPoint = config && config.content && config.content.includes('Role = "SpawnPoint"');
             
             if (isSpawnPoint) {
-              // Create a glowing cylinder for spawn point
               const spawnGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 16);
               const spawnMaterial = new THREE.MeshLambertMaterial({ 
                 color: 0x00FF00,
@@ -526,7 +509,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
               });
               mesh = new THREE.Mesh(spawnGeometry, spawnMaterial);
               
-              // Add a glowing effect
               const glowGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16);
               const glowMaterial = new THREE.MeshBasicMaterial({ 
                 color: 0x00FF00,
@@ -537,7 +519,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
               mesh.add(glow);
               console.log('[GAME] Created spawn point actor:', obj.name);
             } else {
-              // Generic actor representation
               const actorGeometry = new THREE.BoxGeometry(1, 2, 1);
               const actorMaterial = new THREE.MeshLambertMaterial({ color: 0x9B59B6 });
               mesh = new THREE.Mesh(actorGeometry, actorMaterial);
@@ -549,14 +530,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
           case 'model':
           case 'folder':
-            // Create a group for containers
             mesh = new THREE.Group();
             console.log('[GAME] Created group for:', obj.name);
             break;
         }
 
         if (mesh) {
-          // Set position, rotation, scale from object properties
           if (obj.position) {
             mesh.position.set(
               obj.position.x || 0, 
@@ -565,7 +544,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             );
             console.log('[GAME] Set position for', obj.name, ':', mesh.position);
           } else {
-            // Default position for new objects
             mesh.position.set(0, obj.type === 'actor' ? 0.1 : 2, 0);
           }
           
@@ -587,7 +565,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
           console.log('[GAME] Added to scene:', obj.name, 'at position:', mesh.position);
 
-          // Recursively load children
           if (obj.children && obj.children.length > 0) {
             loadObjectsRecursively(obj.children, mesh);
           }
@@ -595,12 +572,10 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       }
     };
 
-    // Load workspace objects
     const workspaceObjects = project.services.workspace.objects || [];
     console.log('[GAME] Total workspace objects to load:', workspaceObjects.length);
     loadObjectsRecursively(workspaceObjects);
     
-    // Update object count
     setGameStats(prev => ({
       ...prev,
       objects: scene.children.filter(child => child.userData.type).length
@@ -610,20 +585,16 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   const init3DGame = () => {
     if (!mountRef.current) return;
 
-    // Clear any existing content
     mountRef.current.innerHTML = '';
 
-    // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
     sceneRef.current = scene;
 
-    // Camera setup
     const camera = new THREE.PerspectiveCamera(75, 800 / 600, 0.1, 1000);
     camera.position.set(0, 5, 10);
     cameraRef.current = camera;
 
-    // Renderer setup
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(800, 600);
     renderer.shadowMap.enabled = true;
@@ -632,7 +603,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
     mountRef.current.appendChild(renderer.domElement);
 
-    // Lighting
     const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
     scene.add(ambientLight);
 
@@ -649,7 +619,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     directionalLight.shadow.camera.bottom = -20;
     scene.add(directionalLight);
 
-    // Create ground/baseplate
     const groundGeometry = new THREE.BoxGeometry(50, 1, 50);
     const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
@@ -659,18 +628,15 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     ground.userData = { id: 'baseplate', type: 'part' };
     scene.add(ground);
 
-    // CRITICAL: Load workspace objects from the project BEFORE creating player
     console.log('[GAME] Loading workspace objects...');
     loadWorkspaceObjects(scene);
 
-    // Find spawn point AFTER loading workspace objects
     const spawn = findSpawnPoint();
     setSpawnPoint(spawn);
     setPlayerPosition(spawn);
 
-    // Create player character (RED CUBE as requested)
     const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
-    const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 }); // RED CUBE
+    const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 });
     const player = new THREE.Mesh(playerGeometry, playerMaterial);
     player.position.set(spawn.x, spawn.y, spawn.z);
     player.castShadow = true;
@@ -681,17 +647,14 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
     console.log('[GAME] Player spawned at:', spawn);
 
-    // Grid helper
     const gridHelper = new THREE.GridHelper(50, 50);
     gridHelper.position.y = 0;
     scene.add(gridHelper);
 
-    // CRITICAL: Create script context and load player scripts
     const context = createScriptContext();
     setScriptContext(context);
     loadAndExecutePlayerScripts(context);
 
-    // FIXED: Proper mouse controls for camera
     let isMouseDown = false;
     let mouseX = 0;
     let mouseY = 0;
@@ -701,17 +664,14 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       mouseX = event.clientX;
       mouseY = event.clientY;
       
-      // Request pointer lock for better camera control
       renderer.domElement.requestPointerLock();
     };
 
     const onMouseMove = (event: MouseEvent) => {
       if (document.pointerLockElement === renderer.domElement) {
-        // Use movementX/Y for smooth camera rotation when pointer is locked
         const deltaX = event.movementX || 0;
         const deltaY = event.movementY || 0;
 
-        // CRITICAL: Call script-based camera rotation if available
         if (context.player.Mouse._mouseMoveCallback) {
           addConsoleOutput(`[MOUSE] Calling script mouse callback: ${deltaX}, ${deltaY}`);
           context.player.Mouse._mouseMoveCallback(deltaX * 0.002, deltaY * 0.002);
@@ -719,7 +679,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           addConsoleOutput(`[MOUSE] Calling character.rotate: ${deltaX}, ${deltaY}`);
           context.character.rotate(deltaX * 0.002, deltaY * 0.002);
         } else {
-          // Fallback direct camera rotation
           addConsoleOutput(`[MOUSE] Direct camera rotation: ${deltaX}, ${deltaY}`);
           setCameraAngle(prev => ({
             horizontal: prev.horizontal + deltaX * 0.002,
@@ -727,7 +686,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           }));
         }
       } else if (isMouseDown) {
-        // Fallback for when pointer lock is not available
         const deltaX = event.clientX - mouseX;
         const deltaY = event.clientY - mouseY;
 
@@ -744,7 +702,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       isMouseDown = false;
     };
 
-    // FIXED: Proper keyboard controls with script execution
     const onKeyDown = (event: KeyboardEvent) => {
       event.preventDefault();
       const key = event.key.toLowerCase();
@@ -755,7 +712,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         if (!newKeys.has(key)) {
           newKeys.add(key);
           
-          // CRITICAL: Call script-based input handlers in proper order
           addConsoleOutput(`[INPUT] Processing key down: ${key}`);
           
           if (context.inputService._keyDownCallback) {
@@ -782,7 +738,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         if (newKeys.has(key)) {
           newKeys.delete(key);
           
-          // CRITICAL: Call script-based input handlers in proper order
           addConsoleOutput(`[INPUT] Processing key up: ${key}`);
           
           if (context.inputService._keyUpCallback) {
@@ -799,35 +754,29 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       });
     };
 
-    // Add event listeners
     renderer.domElement.addEventListener('mousedown', onMouseDown);
     renderer.domElement.addEventListener('mousemove', onMouseMove);
     renderer.domElement.addEventListener('mouseup', onMouseUp);
     
-    // Make canvas focusable and focus it
     renderer.domElement.tabIndex = 0;
     renderer.domElement.focus();
     
-    // Add keyboard listeners
     renderer.domElement.addEventListener('keydown', onKeyDown);
     renderer.domElement.addEventListener('keyup', onKeyUp);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    // Handle pointer lock changes
     const onPointerLockChange = () => {
       setIsMouseLocked(document.pointerLockElement === renderer.domElement);
     };
     
     document.addEventListener('pointerlockchange', onPointerLockChange);
 
-    // Game loop with script execution
     let lastTime = 0;
     const gameLoop = (currentTime: number) => {
       const deltaTime = (currentTime - lastTime) / 1000;
       lastTime = currentTime;
       
-      // Call script-based heartbeat if available
       if (context.game._heartbeatCallback) {
         context.game._heartbeatCallback(deltaTime);
       }
@@ -846,11 +795,9 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     addConsoleOutput('[SYSTEM] Movement system: Scripts → character.moveForward() → Player movement');
     addConsoleOutput('[SYSTEM] Camera system: Scripts → character.rotate() → Camera rotation');
 
-    // Cleanup function
     return () => {
       console.log('[GAME] Cleaning up 3D game...');
       
-      // Remove event listeners
       renderer.domElement.removeEventListener('mousedown', onMouseDown);
       renderer.domElement.removeEventListener('mousemove', onMouseMove);
       renderer.domElement.removeEventListener('mouseup', onMouseUp);
@@ -860,12 +807,10 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       window.removeEventListener('keyup', onKeyUp);
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       
-      // Exit pointer lock
       if (document.pointerLockElement === renderer.domElement) {
         document.exitPointerLock();
       }
       
-      // Clean up renderer
       if (mountRef.current && renderer.domElement) {
         mountRef.current.removeChild(renderer.domElement);
       }
@@ -878,18 +823,15 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
     const gravity = -30;
 
-    // Apply gravity
     setPlayerVelocity(prev => ({ ...prev, y: prev.y + gravity * deltaTime }));
 
-    // Update position based on velocity (which is now controlled by scripts)
     setPlayerPosition(prev => {
       const newPos = {
-        x: prev.x + playerVelocity.x * deltaTime * 20, // Increased multiplier for better movement
+        x: prev.x + playerVelocity.x * deltaTime * 30,
         y: prev.y + playerVelocity.y * deltaTime,
-        z: prev.z + playerVelocity.z * deltaTime * 20
+        z: prev.z + playerVelocity.z * deltaTime * 30
       };
 
-      // Ground collision
       if (newPos.y <= 1) {
         newPos.y = 1;
         setPlayerVelocity(prev => ({ ...prev, y: 0 }));
@@ -898,12 +840,10 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         setIsGrounded(false);
       }
 
-      // Update player mesh position
       playerRef.current!.position.set(newPos.x, newPos.y, newPos.z);
 
-      // Apply friction to horizontal movement
       setPlayerVelocity(prev => ({
-        x: prev.x * 0.85, // Reduced friction for better responsiveness
+        x: prev.x * 0.85,
         y: prev.y,
         z: prev.z * 0.85
       }));
@@ -918,7 +858,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     const camera = cameraRef.current;
     const player = playerRef.current;
 
-    // Third-person camera
     const cameraDistance = 8;
     const cameraHeight = 3;
 
@@ -942,32 +881,27 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     mountRef.current.innerHTML = '';
     mountRef.current.appendChild(canvas);
 
-    // Clear canvas with gradient background
     const gradient = ctx.createLinearGradient(0, 0, 0, 600);
     gradient.addColorStop(0, '#4A90E2');
     gradient.addColorStop(1, '#87CEEB');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 800, 600);
 
-    // Draw platforms
     ctx.fillStyle = '#8B4513';
     ctx.fillRect(0, 500, 800, 100);
     ctx.fillRect(200, 400, 150, 20);
     ctx.fillRect(450, 350, 150, 20);
     ctx.fillRect(100, 300, 100, 20);
 
-    // Draw player sprite
     ctx.fillStyle = '#FF6B6B';
     ctx.fillRect(90, 460, 30, 40);
     
-    // Player details
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(95, 465, 20, 10); // Body
+    ctx.fillRect(95, 465, 20, 10);
     ctx.fillStyle = '#000000';
-    ctx.fillRect(100, 467, 3, 3); // Eye
-    ctx.fillRect(107, 467, 3, 3); // Eye
+    ctx.fillRect(100, 467, 3, 3);
+    ctx.fillRect(107, 467, 3, 3);
 
-    // Draw collectibles
     ctx.fillStyle = '#FFD700';
     for (let i = 0; i < 5; i++) {
       const x = 150 + i * 120;
@@ -977,7 +911,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       ctx.fill();
     }
 
-    // Draw UI
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(10, 10, 180, 60);
     ctx.fillStyle = '#10B981';
@@ -988,7 +921,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     ctx.fillText('Arrow Keys: Move', 20, 45);
     ctx.fillText('Space: Jump', 20, 60);
 
-    // Score
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(650, 10, 140, 40);
     ctx.fillStyle = '#FFD700';
@@ -1011,18 +943,15 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     mountRef.current.innerHTML = '';
     mountRef.current.appendChild(canvas);
 
-    // Clear canvas with app background
     ctx.fillStyle = '#F3F4F6';
     ctx.fillRect(0, 0, 800, 600);
 
-    // Draw header
     ctx.fillStyle = '#10B981';
     ctx.fillRect(0, 0, 800, 60);
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 20px sans-serif';
     ctx.fillText('Virb.IO Web Application', 20, 35);
 
-    // Draw navigation
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 60, 200, 540);
     ctx.fillStyle = '#374151';
@@ -1037,18 +966,15 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       ctx.fillText(item, 20, 130 + index * 40);
     });
 
-    // Draw main content area
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(220, 80, 560, 500);
     
-    // Draw cards
     ctx.fillStyle = '#F9FAFB';
     ctx.fillRect(240, 100, 160, 120);
     ctx.fillRect(420, 100, 160, 120);
     ctx.fillRect(240, 240, 160, 120);
     ctx.fillRect(420, 240, 160, 120);
 
-    // Card content
     ctx.fillStyle = '#374151';
     ctx.font = '14px sans-serif';
     ctx.fillText('Total Users', 250, 120);
@@ -1063,14 +989,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     ctx.fillText('89', 250, 290);
     ctx.fillText('12.5k', 430, 290);
 
-    // Draw chart area
     ctx.fillStyle = '#F3F4F6';
     ctx.fillRect(240, 380, 520, 180);
     ctx.fillStyle = '#374151';
     ctx.font = '16px sans-serif';
     ctx.fillText('Analytics Chart', 250, 400);
 
-    // Simple line chart
     ctx.strokeStyle = '#10B981';
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -1082,7 +1006,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     }
     ctx.stroke();
 
-    // Status indicator
     ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
     ctx.fillRect(650, 20, 140, 20);
     ctx.fillStyle = '#10B981';
@@ -1095,7 +1018,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   };
 
   const resetGame = () => {
-    // Reset player to spawn point
     const spawn = findSpawnPoint();
     setPlayerPosition(spawn);
     setPlayerVelocity({ x: 0, y: 0, z: 0 });
@@ -1110,7 +1032,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       cameraRef.current.position.set(spawn.x, spawn.y + 5, spawn.z + 10);
     }
 
-    // Clear console and reload scripts
     setConsoleOutput([]);
     if (scriptContext) {
       loadAndExecutePlayerScripts(scriptContext);
@@ -1119,7 +1040,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
 
   return (
     <div className="flex-1 flex flex-col bg-gray-900">
-      {/* Preview Header */}
       <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -1163,7 +1083,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         </div>
       </div>
 
-      {/* Game Canvas */}
       <div className={`flex-1 flex items-center justify-center p-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-black' : ''}`}>
         <div className="relative">
           <div
@@ -1175,7 +1094,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             }}
           />
           
-          {/* Game Controls Overlay */}
           <div className="absolute bottom-4 left-4 bg-black bg-opacity-70 text-white p-3 rounded-lg">
             <div className="text-sm space-y-1">
               {project.type === 'game3d' && (
@@ -1208,7 +1126,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             </div>
           </div>
 
-          {/* Performance Overlay */}
           <div className="absolute top-4 right-4 bg-black bg-opacity-70 text-white p-2 rounded text-xs font-mono">
             <div>FPS: {gameStats.fps}</div>
             <div>Memory: {gameStats.memory}</div>
@@ -1226,7 +1143,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             )}
           </div>
 
-          {/* Instructions Overlay for 3D Game */}
           {project.type === 'game3d' && (
             <div className="absolute top-4 left-4 bg-black bg-opacity-70 text-white p-3 rounded-lg">
               <div className="text-sm space-y-1">
@@ -1241,7 +1157,6 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         </div>
       </div>
 
-      {/* Console Output */}
       <div className="bg-gray-800 border-t border-gray-700 p-4 h-32 overflow-auto">
         <div className="text-sm font-mono text-gray-300 space-y-1">
           <div className="text-green-400">[INFO] Game initialized with Virb.IO script execution system</div>

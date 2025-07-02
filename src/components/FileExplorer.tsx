@@ -39,7 +39,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
   const dragCounter = useRef(0);
 
-  const hasThreeDStorage = installedPlugins.some(plugin => plugin.name === 'THREEDStorage');
+  const hasThreeDStorage = installedPlugins?.some(plugin => plugin.name === 'THREEDStorage') || false;
 
   // Protected items that cannot be deleted or renamed
   const protectedItems = new Set([
@@ -75,6 +75,32 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
   };
 
   function buildServicesFromProject() {
+    // Add comprehensive null checks and default values
+    if (!project || !project.services) {
+      console.warn('Project or project.services is undefined, returning default services');
+      return [
+        {
+          id: 'workspace',
+          name: 'Workspace',
+          icon: <Box className="w-4 h-4 text-indigo-400" />,
+          type: 'workspace',
+          children: []
+        },
+        {
+          id: 'sharedStorage',
+          name: 'SharedStorage',
+          icon: <Folder className="w-4 h-4 text-blue-400" />,
+          children: []
+        },
+        {
+          id: 'privateStorage',
+          name: 'PrivateStorage',
+          icon: <Folder className="w-4 h-4 text-orange-400" />,
+          children: []
+        }
+      ];
+    }
+
     const services = [
       {
         id: 'workspace',
@@ -90,7 +116,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
             icon: <Box className="w-4 h-4 text-indigo-400" />
           },
           // CRITICAL FIX: Add ALL workspace objects directly here so they appear in the game
-          ...project.services.workspace.objects.map((obj: any) => ({
+          ...(project?.services?.workspace?.objects || []).map((obj: any) => ({
             ...obj,
             icon: obj.type === 'config' ? <ScriptIcon type={obj.type} /> : 
                   obj.type === 'actor' ? <User className="w-4 h-4 text-green-400" /> :
@@ -117,31 +143,31 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         name: 'SharedStorage',
         icon: <Folder className="w-4 h-4 text-blue-400" />,
         children: [
-          ...(project.services.replicatedStorage.images.length > 0 ? [{
+          ...((project?.services?.replicatedStorage?.images?.length || 0) > 0 ? [{
             id: 'ss-images',
             name: 'Images',
             icon: <Image className="w-4 h-4 text-purple-400" />,
-            children: project.services.replicatedStorage.images.map((img: any) => ({
+            children: (project?.services?.replicatedStorage?.images || []).map((img: any) => ({
               ...img,
               icon: <Image className="w-4 h-4 text-purple-400" />,
               children: img.children || []
             }))
           }] : []),
-          ...(project.services.replicatedStorage.sounds.length > 0 ? [{
+          ...((project?.services?.replicatedStorage?.sounds?.length || 0) > 0 ? [{
             id: 'ss-sounds',
             name: 'Sounds',
             icon: <Volume2 className="w-4 h-4 text-yellow-400" />,
-            children: project.services.replicatedStorage.sounds.map((sound: any) => ({
+            children: (project?.services?.replicatedStorage?.sounds || []).map((sound: any) => ({
               ...sound,
               icon: <Volume2 className="w-4 h-4 text-yellow-400" />,
               children: sound.children || []
             }))
           }] : []),
-          ...(project.services.replicatedStorage.scripts.length > 0 ? [{
+          ...((project?.services?.replicatedStorage?.scripts?.length || 0) > 0 ? [{
             id: 'ss-scripts',
             name: 'Scripts',
             icon: <Folder className="w-4 h-4 text-green-400" />,
-            children: project.services.replicatedStorage.scripts.map((script: any) => ({
+            children: (project?.services?.replicatedStorage?.scripts || []).map((script: any) => ({
               ...script,
               // Keep original type but map display type for icons
               displayType: script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type,
@@ -156,17 +182,17 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         name: 'PrivateStorage',
         icon: <Folder className="w-4 h-4 text-orange-400" />,
         children: [
-          ...project.services.serverStorage.scripts.map((script: any) => ({
+          ...(project?.services?.serverStorage?.scripts || []).map((script: any) => ({
             ...script,
             // Keep original type but map display type for icons
             displayType: script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type,
             icon: <ScriptIcon type={script.type === 'vscript' ? 'basic' : script.type === 'vlscript' ? 'home' : script.type} />,
             children: script.children || []
           })),
-          ...project.services.serverStorage.character?.map((char: any) => ({
+          ...(project?.services?.serverStorage?.character || []).map((char: any) => ({
             ...char,
             icon: <Folder className="w-4 h-4 text-cyan-400" />,
-            children: char.children?.map((child: any) => ({
+            children: (char.children || []).map((child: any) => ({
               ...child,
               // Keep original type but map display type for icons
               displayType: child.type === 'vlscript' ? 'home' : child.type,
@@ -175,22 +201,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
                     child.type === 'vlscript' ? <ScriptIcon type="home" /> :
                     child.type === 'config' ? <ScriptIcon type={child.type} /> :
                     <Image className="w-4 h-4 text-purple-400" />,
-              children: child.children?.map((grandchild: any) => ({
+              children: (child.children || []).map((grandchild: any) => ({
                 ...grandchild,
                 // Keep original type but map display type for icons
                 displayType: grandchild.type === 'vscript' ? 'basic' : grandchild.type === 'vlscript' ? 'home' : grandchild.type,
                 icon: <ScriptIcon type={grandchild.type === 'vscript' ? 'basic' : grandchild.type === 'vlscript' ? 'home' : grandchild.type} />,
                 children: grandchild.children || []
-              })) || []
-            })) || []
-          })) || []
+              }))
+            }))
+          }))
         ]
       },
-      ...(project.services.replicatedFirst.databases.length > 0 ? [{
+      ...((project?.services?.replicatedFirst?.databases?.length || 0) > 0 ? [{
         id: 'dataVault',
         name: 'DataVault',
         icon: <Database className="w-4 h-4 text-cyan-400" />,
-        children: project.services.replicatedFirst.databases.map((db: any) => ({
+        children: (project?.services?.replicatedFirst?.databases || []).map((db: any) => ({
           ...db,
           icon: <ScriptIcon type={db.type} />,
           children: db.children || []
@@ -208,11 +234,11 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
         icon: <Image className="w-4 h-4 text-purple-400" />,
         children: []
       },
-      ...(project.services.uiService.screens.length > 0 ? [{
+      ...((project?.services?.uiService?.screens?.length || 0) > 0 ? [{
         id: 'uiService',
         name: 'UIService',
         icon: <Monitor className="w-4 h-4 text-pink-400" />,
-        children: project.services.uiService.screens.map((screen: any) => ({
+        children: (project?.services?.uiService?.screens || []).map((screen: any) => ({
           ...screen,
           icon: <Monitor className="w-4 h-4 text-pink-400" />,
           children: screen.children || []
@@ -298,6 +324,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect, curren
 
   // CRITICAL: Function to sync changes back to project data
   const updateProjectData = (updatedServices: any[]) => {
+    if (!project || !project.services) return;
+    
     const workspaceService = updatedServices.find(service => service.id === 'workspace');
     if (workspaceService) {
       // Filter out the workspace-view item and update the project

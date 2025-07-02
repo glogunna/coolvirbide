@@ -310,8 +310,12 @@ class DatabaseService {
   async getUserProjects(userId: string): Promise<Project[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    // Add explicit validation for userId to prevent IndexedDB errors
-    if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+    // Enhanced validation for userId to prevent IndexedDB errors
+    if (!userId || 
+        typeof userId !== 'string' || 
+        userId.trim() === '' ||
+        userId === 'null' ||
+        userId === 'undefined') {
       console.warn('Invalid userId provided to getUserProjects:', userId);
       return [];
     }
@@ -321,9 +325,9 @@ class DatabaseService {
       const store = transaction.objectStore('projects');
       const index = store.index('userId');
       
-      // Additional defensive check right before the IndexedDB call
-      if (userId === null || userId === undefined) {
-        console.warn('userId is null or undefined at IndexedDB call time');
+      // Final defensive check right before the IndexedDB call
+      if (userId === null || userId === undefined || userId === 'null' || userId === 'undefined') {
+        console.warn('userId is invalid at IndexedDB call time:', userId);
         resolve([]);
         return;
       }
@@ -331,7 +335,10 @@ class DatabaseService {
       const request = index.getAll(userId);
 
       request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        console.error('Error getting user projects:', request.error);
+        resolve([]); // Return empty array instead of rejecting to prevent app crash
+      };
     });
   }
 

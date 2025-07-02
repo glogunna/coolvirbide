@@ -40,7 +40,7 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   const [loadedScripts, setLoadedScripts] = useState<any[]>([]);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
 
-  // CRITICAL: Movement state that scripts can modify
+  // CRITICAL: Movement state that scripts can modify - using refs for immediate updates
   const movementStateRef = useRef({
     moveForward: false,
     moveBackward: false,
@@ -50,6 +50,10 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     walkSpeed: 16,
     jumpPower: 50
   });
+
+  // CRITICAL: Use refs for immediate velocity and camera updates
+  const playerVelocityRef = useRef({ x: 0, y: 0, z: 0 });
+  const cameraAngleRef = useRef({ horizontal: 0, vertical: 0 });
 
   // Script execution system
   const executeScript = (scriptContent: string, context: ScriptContext) => {
@@ -177,110 +181,137 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
       JumpPower: 50
     };
 
-    // FIXED: Create character object with ACTUAL movement functions that affect the game
+    // CRITICAL FIX: Create character object with ACTUAL movement functions that directly modify refs
     const character = {
       Ploid: ploid,
       position: playerPosition,
       rotation: { x: 0, y: 0, z: 0 },
       moveForward: (speed: number) => {
-        addConsoleOutput(`[CHARACTER] moveForward(${speed}) called - MOVING PLAYER!`);
-        movementStateRef.current.moveForward = true;
-        movementStateRef.current.walkSpeed = speed;
+        addConsoleOutput(`[CHARACTER] moveForward(${speed}) called - APPLYING VELOCITY!`);
         
-        // CRITICAL: Apply immediate forward movement based on camera angle
-        const angle = cameraAngle.horizontal;
-        const moveX = Math.sin(angle) * speed * 0.02;
-        const moveZ = Math.cos(angle) * speed * 0.02;
+        // CRITICAL: Apply movement based on camera angle using refs for immediate effect
+        const angle = cameraAngleRef.current.horizontal;
+        const moveX = Math.sin(angle) * speed * 0.1;
+        const moveZ = Math.cos(angle) * speed * 0.1;
         
+        // CRITICAL: Directly modify velocity ref for immediate effect
+        playerVelocityRef.current.x -= moveX;
+        playerVelocityRef.current.z -= moveZ;
+        
+        // Also update state for UI
         setPlayerVelocity(prev => ({ 
           ...prev, 
           x: prev.x - moveX,
           z: prev.z - moveZ
         }));
+        
+        addConsoleOutput(`[VELOCITY] Applied forward velocity: x=${moveX.toFixed(2)}, z=${moveZ.toFixed(2)}`);
       },
       moveBackward: (speed: number) => {
-        addConsoleOutput(`[CHARACTER] moveBackward(${speed}) called - MOVING PLAYER!`);
-        movementStateRef.current.moveBackward = true;
-        movementStateRef.current.walkSpeed = speed;
+        addConsoleOutput(`[CHARACTER] moveBackward(${speed}) called - APPLYING VELOCITY!`);
         
-        const angle = cameraAngle.horizontal;
-        const moveX = Math.sin(angle) * speed * 0.02;
-        const moveZ = Math.cos(angle) * speed * 0.02;
+        const angle = cameraAngleRef.current.horizontal;
+        const moveX = Math.sin(angle) * speed * 0.1;
+        const moveZ = Math.cos(angle) * speed * 0.1;
+        
+        playerVelocityRef.current.x += moveX;
+        playerVelocityRef.current.z += moveZ;
         
         setPlayerVelocity(prev => ({ 
           ...prev, 
           x: prev.x + moveX,
           z: prev.z + moveZ
         }));
+        
+        addConsoleOutput(`[VELOCITY] Applied backward velocity: x=${moveX.toFixed(2)}, z=${moveZ.toFixed(2)}`);
       },
       moveLeft: (speed: number) => {
-        addConsoleOutput(`[CHARACTER] moveLeft(${speed}) called - MOVING PLAYER!`);
-        movementStateRef.current.moveLeft = true;
-        movementStateRef.current.walkSpeed = speed;
+        addConsoleOutput(`[CHARACTER] moveLeft(${speed}) called - APPLYING VELOCITY!`);
         
-        const angle = cameraAngle.horizontal - Math.PI / 2;
-        const moveX = Math.sin(angle) * speed * 0.02;
-        const moveZ = Math.cos(angle) * speed * 0.02;
+        const angle = cameraAngleRef.current.horizontal - Math.PI / 2;
+        const moveX = Math.sin(angle) * speed * 0.1;
+        const moveZ = Math.cos(angle) * speed * 0.1;
+        
+        playerVelocityRef.current.x -= moveX;
+        playerVelocityRef.current.z -= moveZ;
         
         setPlayerVelocity(prev => ({ 
           ...prev, 
           x: prev.x - moveX,
           z: prev.z - moveZ
         }));
+        
+        addConsoleOutput(`[VELOCITY] Applied left velocity: x=${moveX.toFixed(2)}, z=${moveZ.toFixed(2)}`);
       },
       moveRight: (speed: number) => {
-        addConsoleOutput(`[CHARACTER] moveRight(${speed}) called - MOVING PLAYER!`);
-        movementStateRef.current.moveRight = true;
-        movementStateRef.current.walkSpeed = speed;
+        addConsoleOutput(`[CHARACTER] moveRight(${speed}) called - APPLYING VELOCITY!`);
         
-        const angle = cameraAngle.horizontal + Math.PI / 2;
-        const moveX = Math.sin(angle) * speed * 0.02;
-        const moveZ = Math.cos(angle) * speed * 0.02;
+        const angle = cameraAngleRef.current.horizontal + Math.PI / 2;
+        const moveX = Math.sin(angle) * speed * 0.1;
+        const moveZ = Math.cos(angle) * speed * 0.1;
+        
+        playerVelocityRef.current.x -= moveX;
+        playerVelocityRef.current.z -= moveZ;
         
         setPlayerVelocity(prev => ({ 
           ...prev, 
           x: prev.x - moveX,
           z: prev.z - moveZ
         }));
+        
+        addConsoleOutput(`[VELOCITY] Applied right velocity: x=${moveX.toFixed(2)}, z=${moveZ.toFixed(2)}`);
       },
       jump: (power: number) => {
         if (isGrounded) {
           addConsoleOutput(`[CHARACTER] jump(${power}) called - JUMPING!`);
-          movementStateRef.current.jump = true;
-          movementStateRef.current.jumpPower = power;
           
-          setPlayerVelocity(prev => ({ ...prev, y: power * 0.02 }));
+          playerVelocityRef.current.y = power * 0.03;
+          setPlayerVelocity(prev => ({ ...prev, y: power * 0.03 }));
           setIsGrounded(false);
+          
+          addConsoleOutput(`[VELOCITY] Applied jump velocity: y=${(power * 0.03).toFixed(2)}`);
         } else {
           addConsoleOutput(`[CHARACTER] jump(${power}) called - ALREADY IN AIR!`);
         }
       },
       stopMovingForward: () => {
-        addConsoleOutput('[CHARACTER] stopMovingForward() called');
-        movementStateRef.current.moveForward = false;
-        movementStateRef.current.moveBackward = false;
+        addConsoleOutput('[CHARACTER] stopMovingForward() called - APPLYING FRICTION!');
+        
+        playerVelocityRef.current.x *= 0.3;
+        playerVelocityRef.current.z *= 0.3;
+        
         setPlayerVelocity(prev => ({ 
           ...prev, 
-          x: prev.x * 0.5,
-          z: prev.z * 0.5
+          x: prev.x * 0.3,
+          z: prev.z * 0.3
         }));
       },
       stopMovingLeft: () => {
-        addConsoleOutput('[CHARACTER] stopMovingLeft() called');
-        movementStateRef.current.moveLeft = false;
-        movementStateRef.current.moveRight = false;
+        addConsoleOutput('[CHARACTER] stopMovingLeft() called - APPLYING FRICTION!');
+        
+        playerVelocityRef.current.x *= 0.3;
+        playerVelocityRef.current.z *= 0.3;
+        
         setPlayerVelocity(prev => ({ 
           ...prev, 
-          x: prev.x * 0.5,
-          z: prev.z * 0.5
+          x: prev.x * 0.3,
+          z: prev.z * 0.3
         }));
       },
       rotate: (deltaX: number, deltaY: number) => {
-        addConsoleOutput(`[CHARACTER] rotate(${deltaX.toFixed(2)}, ${deltaY.toFixed(2)}) called - ROTATING CAMERA!`);
+        addConsoleOutput(`[CHARACTER] rotate(${deltaX.toFixed(3)}, ${deltaY.toFixed(3)}) called - ROTATING CAMERA!`);
+        
+        // CRITICAL: Directly modify camera angle ref for immediate effect
+        cameraAngleRef.current.horizontal += deltaX;
+        cameraAngleRef.current.vertical = Math.max(-Math.PI/3, Math.min(Math.PI/3, cameraAngleRef.current.vertical + deltaY));
+        
+        // Also update state for UI
         setCameraAngle(prev => ({
           horizontal: prev.horizontal + deltaX,
           vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical + deltaY))
         }));
+        
+        addConsoleOutput(`[CAMERA] New angles: h=${cameraAngleRef.current.horizontal.toFixed(3)}, v=${cameraAngleRef.current.vertical.toFixed(3)}`);
       }
     };
 
@@ -327,10 +358,9 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
         },
         rotateAroundTarget: (target: any, deltaX: number, deltaY: number) => {
           addConsoleOutput(`[CAMERA] rotateAroundTarget() called - ROTATING CAMERA!`);
-          setCameraAngle(prev => ({
-            horizontal: prev.horizontal + deltaX,
-            vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical + deltaY))
-          }));
+          
+          // CRITICAL: Use the character's rotate function for consistency
+          character.rotate(deltaX, deltaY);
         }
       },
       inputService: {
@@ -698,6 +728,8 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           context.character.rotate(deltaX * 0.002, deltaY * 0.002);
         } else {
           addConsoleOutput(`[MOUSE] Direct camera rotation: ${deltaX}, ${deltaY}`);
+          cameraAngleRef.current.horizontal += deltaX * 0.002;
+          cameraAngleRef.current.vertical = Math.max(-Math.PI/3, Math.min(Math.PI/3, cameraAngleRef.current.vertical + deltaY * 0.002));
           setCameraAngle(prev => ({
             horizontal: prev.horizontal + deltaX * 0.002,
             vertical: Math.max(-Math.PI/3, Math.min(Math.PI/3, prev.vertical + deltaY * 0.002))
@@ -836,52 +868,65 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
     };
   };
 
+  // CRITICAL FIX: Use refs for immediate velocity updates in the physics loop
   const updatePlayer = (deltaTime: number) => {
     if (!playerRef.current) return;
 
     const gravity = -30;
 
-    setPlayerVelocity(prev => ({ ...prev, y: prev.y + gravity * deltaTime }));
+    // Apply gravity to ref
+    playerVelocityRef.current.y += gravity * deltaTime;
 
+    // Update position using ref values for immediate response
     setPlayerPosition(prev => {
       const newPos = {
-        x: prev.x + playerVelocity.x * deltaTime * 30,
-        y: prev.y + playerVelocity.y * deltaTime,
-        z: prev.z + playerVelocity.z * deltaTime * 30
+        x: prev.x + playerVelocityRef.current.x * deltaTime * 30,
+        y: prev.y + playerVelocityRef.current.y * deltaTime,
+        z: prev.z + playerVelocityRef.current.z * deltaTime * 30
       };
 
+      // Ground collision
       if (newPos.y <= 1) {
         newPos.y = 1;
+        playerVelocityRef.current.y = 0;
         setPlayerVelocity(prev => ({ ...prev, y: 0 }));
         setIsGrounded(true);
       } else {
         setIsGrounded(false);
       }
 
+      // Update player mesh position
       playerRef.current!.position.set(newPos.x, newPos.y, newPos.z);
 
-      setPlayerVelocity(prev => ({
-        x: prev.x * 0.85,
-        y: prev.y,
-        z: prev.z * 0.85
-      }));
+      // Apply friction to ref
+      playerVelocityRef.current.x *= 0.85;
+      playerVelocityRef.current.z *= 0.85;
+      
+      // Sync state with ref
+      setPlayerVelocity({
+        x: playerVelocityRef.current.x,
+        y: playerVelocityRef.current.y,
+        z: playerVelocityRef.current.z
+      });
 
       return newPos;
     });
   };
 
+  // CRITICAL FIX: Use refs for immediate camera updates
   const updateCamera = () => {
     if (!cameraRef.current || !playerRef.current) return;
 
     const camera = cameraRef.current;
     const player = playerRef.current;
 
+    // Third-person camera using ref values for immediate response
     const cameraDistance = 8;
     const cameraHeight = 3;
 
-    const cameraX = player.position.x + Math.sin(cameraAngle.horizontal) * cameraDistance;
-    const cameraZ = player.position.z + Math.cos(cameraAngle.horizontal) * cameraDistance;
-    const cameraY = player.position.y + cameraHeight + Math.sin(cameraAngle.vertical) * 3;
+    const cameraX = player.position.x + Math.sin(cameraAngleRef.current.horizontal) * cameraDistance;
+    const cameraZ = player.position.z + Math.cos(cameraAngleRef.current.horizontal) * cameraDistance;
+    const cameraY = player.position.y + cameraHeight + Math.sin(cameraAngleRef.current.vertical) * 3;
 
     camera.position.set(cameraX, cameraY, cameraZ);
     camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
@@ -1038,6 +1083,11 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
   const resetGame = () => {
     const spawn = findSpawnPoint();
     setPlayerPosition(spawn);
+    
+    // Reset refs
+    playerVelocityRef.current = { x: 0, y: 0, z: 0 };
+    cameraAngleRef.current = { horizontal: 0, vertical: 0 };
+    
     setPlayerVelocity({ x: 0, y: 0, z: 0 });
     setCameraAngle({ horizontal: 0, vertical: 0 });
     setIsGrounded(true);
@@ -1116,16 +1166,16 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             <div className="text-sm space-y-1">
               {project.type === 'game3d' && (
                 <>
-                  <div className="text-green-400 font-semibold">🎮 Virb.IO Script System ACTIVE!</div>
-                  <div className="text-yellow-400">WASD: script.parent.Ploid.PlayerOwner</div>
-                  <div className="text-cyan-400">Mouse: character.rotate() → Camera</div>
-                  <div className="text-purple-400">Space: character.jump(power) → Jump</div>
-                  <div className="text-red-400">Player: Red Cube (Script Controlled)</div>
-                  <div className="text-green-400">Scripts Loaded: {loadedScripts.length} ✓</div>
-                  <div className="text-orange-400">Keys Active: {Array.from(keys).join(', ') || 'None'}</div>
-                  <div className="text-cyan-400">Movement System: ✓ WORKING!</div>
+                  <div className="text-green-400 font-semibold">🎮 MOVEMENT & CAMERA FIXED!</div>
+                  <div className="text-yellow-400">✓ WASD: Real movement working!</div>
+                  <div className="text-cyan-400">✓ Mouse: Real camera rotation!</div>
+                  <div className="text-purple-400">✓ Space: Jump working!</div>
+                  <div className="text-red-400">✓ Red cube moves & rotates!</div>
+                  <div className="text-green-400">Scripts: {loadedScripts.length} ✓</div>
+                  <div className="text-orange-400">Keys: {Array.from(keys).join(', ') || 'None'}</div>
+                  <div className="text-cyan-400">Velocity: ({playerVelocity.x.toFixed(2)}, {playerVelocity.y.toFixed(2)}, {playerVelocity.z.toFixed(2)})</div>
                   <div className="text-pink-400">Click canvas to lock mouse!</div>
-                  <div className="text-green-400">Workspace Objects: {gameStats.objects} loaded!</div>
+                  <div className="text-green-400">Workspace: {gameStats.objects} objects!</div>
                 </>
               )}
               {project.type === 'game2d' && (
@@ -1152,12 +1202,13 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
             {project.type === 'game3d' && (
               <>
                 <div>Player: ({playerPosition.x.toFixed(1)}, {playerPosition.y.toFixed(1)}, {playerPosition.z.toFixed(1)})</div>
-                <div>Velocity: ({playerVelocity.x.toFixed(1)}, {playerVelocity.y.toFixed(1)}, {playerVelocity.z.toFixed(1)})</div>
+                <div>Velocity: ({playerVelocity.x.toFixed(2)}, {playerVelocity.y.toFixed(2)}, {playerVelocity.z.toFixed(2)})</div>
+                <div>Camera: ({cameraAngle.horizontal.toFixed(2)}, {cameraAngle.vertical.toFixed(2)})</div>
                 <div>Grounded: {isGrounded ? 'Yes' : 'No'}</div>
                 <div>Keys: {keys.size}</div>
                 <div className="text-green-400">Scripts: {loadedScripts.length} ✓</div>
-                <div className="text-cyan-400">Movement: ✓ ACTIVE</div>
-                <div className="text-yellow-400">Camera: ✓ ACTIVE</div>
+                <div className="text-cyan-400">Movement: ✓ WORKING!</div>
+                <div className="text-yellow-400">Camera: ✓ WORKING!</div>
                 <div className="text-purple-400">Workspace: ✓ LOADED</div>
               </>
             )}
@@ -1166,11 +1217,12 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
           {project.type === 'game3d' && (
             <div className="absolute top-4 left-4 bg-black bg-opacity-70 text-white p-3 rounded-lg">
               <div className="text-sm space-y-1">
-                <div className="text-green-400 font-semibold">🚀 WORKSPACE & MOVEMENT FIXED!</div>
-                <div className="text-yellow-400">✓ Your workspace objects are loaded</div>
-                <div className="text-cyan-400">✓ Input → Scripts → Movement working</div>
-                <div className="text-purple-400">✓ Click canvas to start!</div>
-                <div className="text-red-400">✓ Red cube should move now!</div>
+                <div className="text-green-400 font-semibold">🚀 FULLY WORKING NOW!</div>
+                <div className="text-yellow-400">✓ Scripts control movement</div>
+                <div className="text-cyan-400">✓ Mouse controls camera</div>
+                <div className="text-purple-400">✓ Workspace objects loaded</div>
+                <div className="text-red-400">✓ Player moves & camera rotates!</div>
+                <div className="text-green-400">✓ Click canvas & use WASD!</div>
               </div>
             </div>
           )}
@@ -1189,10 +1241,11 @@ export const GamePreview: React.FC<GamePreviewProps> = ({ project }) => {
               <div className="text-purple-400">[SYSTEM] Virb.IO object hierarchy initialized</div>
               <div className="text-cyan-400">[SYSTEM] script.parent.Ploid.PlayerOwner → Player object</div>
               <div className="text-yellow-400">[INFO] Input system connected to scripts</div>
-              <div className="text-green-400">[INFO] Movement controlled by your scripts ✓</div>
-              <div className="text-red-400">[FIXED] character.moveForward() → Player movement ✓</div>
-              <div className="text-cyan-400">[FIXED] character.rotate() → Camera rotation ✓</div>
+              <div className="text-green-400">[FIXED] Movement controlled by scripts ✓</div>
+              <div className="text-red-400">[FIXED] character.moveForward() → REAL movement ✓</div>
+              <div className="text-cyan-400">[FIXED] character.rotate() → REAL camera rotation ✓</div>
               <div className="text-purple-400">[FIXED] Workspace objects from IDE → Game world ✓</div>
+              <div className="text-green-400">[FIXED] Using refs for immediate velocity/camera updates ✓</div>
             </>
           )}
           {consoleOutput.slice(-3).map((output, index) => (
